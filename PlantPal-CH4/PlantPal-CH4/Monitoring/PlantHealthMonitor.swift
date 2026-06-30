@@ -10,7 +10,8 @@ import BackgroundTasks
 // Everything downstream of "I have a SensorReading" is unchanged.
 // ══════════════════════════════════════════════════════════════
 
-actor PlantHealthMonitor {
+@MainActor
+final class PlantHealthMonitor {
 
     static let shared = PlantHealthMonitor()
 

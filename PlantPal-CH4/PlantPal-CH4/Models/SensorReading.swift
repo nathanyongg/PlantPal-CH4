@@ -9,7 +9,7 @@ import Foundation
 // raw bytes or JSON.
 // ══════════════════════════════════════════════════════════════
 
-struct SensorReading: Codable, Equatable {
+struct SensorReading: Codable, Equatable, Sendable {
     let timestamp: Date
     let temperature: Double      // °C
     let humidity: Double         // %

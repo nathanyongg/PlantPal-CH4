@@ -11,7 +11,8 @@ import Foundation
 // No proximity required. Works from anywhere with internet.
 // ══════════════════════════════════════════════════════════════
 
-actor PlantDataService {
+@MainActor
+final class PlantDataService {
 
     private let session: URLSession
     private let baseURL: URL

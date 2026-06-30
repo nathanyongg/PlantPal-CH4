@@ -9,7 +9,7 @@ import Foundation
 // gets logged to CSV either way.
 // ══════════════════════════════════════════════════════════════
 
-struct DetectionResult {
+struct DetectionResult: Sendable {
     let timestamp: Date
     let statuses: [SensorStatus]
 

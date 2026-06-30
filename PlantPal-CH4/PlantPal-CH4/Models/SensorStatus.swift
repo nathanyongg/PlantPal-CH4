@@ -8,7 +8,7 @@ import Foundation
 // sensor levels to find the overall severity in one line.
 // ══════════════════════════════════════════════════════════════
 
-enum AlertLevel: Int, Comparable {
+enum AlertLevel: Int, Comparable, Sendable {
     case healthy = 0
     case warning = 1
     case critical = 2
@@ -26,7 +26,7 @@ enum AlertLevel: Int, Comparable {
 // moisture, light) every time `PlantHealthDetector.assess()` runs.
 // ══════════════════════════════════════════════════════════════
 
-struct SensorStatus: Identifiable {
+struct SensorStatus: Identifiable, Sendable {
     let id = UUID()
     let name: String
     let value: Double

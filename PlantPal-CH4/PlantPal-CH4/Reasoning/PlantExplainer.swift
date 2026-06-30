@@ -1,3 +1,4 @@
+import Foundation
 import FoundationModels
 
 // ══════════════════════════════════════════════════════════════
@@ -14,7 +15,8 @@ import FoundationModels
 //   4. Handle the cases where Apple Intelligence isn't available
 // ══════════════════════════════════════════════════════════════
 
-actor PlantExplainer {
+@MainActor
+final class PlantExplainer {
 
     private let session: LanguageModelSession
 
@@ -57,7 +59,7 @@ actor PlantExplainer {
                 to: prompt,
                 generating: PlantExplanation.self
             )
-            return response.value
+            return response.content
 
         } catch let error as LanguageModelSession.GenerationError {
             // Model-specific failures — guardrail violations, unsupported
