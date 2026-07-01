@@ -16,39 +16,62 @@ actor GeminiService {
     static let shared = GeminiService()
 
     private var apiKey: String { SecretsManager.geminiAPIKey }
-    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-    private let session = URLSession.shared
+    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
 
     func fetchThresholds(for plantName: String) async throws -> PlantThresholds {
+
         let prompt = buildPrompt(for: plantName)
-        let raw    = try await callGemini(prompt: prompt)
-        return try parseThresholds(from: raw)
+
+        for attempt in 0..<3 {
+            do {
+                let raw = try await callGemini(prompt: prompt)
+                return try parseThresholds(from: raw)
+
+            } catch GeminiServiceError.apiError(let code)
+                where code == 429 || code == 500 || code == 502 || code == 503 {
+
+                if attempt == 2 {
+                    throw GeminiServiceError.apiError(code)
+                }
+
+                try await Task.sleep(for: .seconds(2))
+
+            } catch {
+                throw error
+            }
+        }
+
+        throw GeminiServiceError.invalidResponse
     }
 
     // MARK: — Prompt
 
     private func buildPrompt(for plantName: String) -> String {
         """
-        You are a plant care expert. Return ONLY a valid JSON object — no markdown,
-        no explanation, no extra text. Just the raw JSON.
+        Return the ideal care thresholds for \(plantName).
 
-        Return the ideal environmental conditions for \(plantName) as:
+        Respond with ONLY this JSON object:
+
         {
-          "minTemperature": <number in Celsius>,
-          "maxTemperature": <number in Celsius>,
-          "minHumidity": <number as percentage 0-100>,
-          "maxHumidity": <number as percentage 0-100>,
-          "minSoilMoisture": <number as percentage 0-100>,
-          "maxSoilMoisture": <number as percentage 0-100>,
-          "minLight": <number in lux>,
-          "maxLight": <number in lux>
+          "minTemperature": 0,
+          "maxTemperature": 0,
+          "minHumidity": 0,
+          "maxHumidity": 0,
+          "minSoilMoisture": 0,
+          "maxSoilMoisture": 0,
+          "minLight": 0,
+          "maxLight": 0
         }
 
-        Use the midpoint of healthy ranges. If the plant is unknown, use
-        average tropical houseplant values as a safe fallback.
+        All values must be numbers.
         """
     }
-
     // MARK: — Gemini API call
 
     private func callGemini(prompt: String) async throws -> String {
@@ -63,11 +86,21 @@ actor GeminiService {
 
         let body: [String: Any] = [
             "contents": [
-                ["parts": [["text": prompt]]]
+                [
+                    "parts": [
+                        [
+                            "text": prompt
+                        ]
+                    ]
+                ]
             ],
             "generationConfig": [
-                "temperature": 0.1,   // low temp = more deterministic, better for factual data
-                "maxOutputTokens": 256
+                "temperature": 0,
+                "maxOutputTokens": 512,
+                "responseMimeType": "application/json",
+                "thinkingConfig": [
+                    "thinkingBudget": 0
+                ]
             ]
         ]
 
@@ -77,6 +110,7 @@ actor GeminiService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let (data, response) = try await session.data(for: request)
+        print(String(data: data, encoding: .utf8)!)
 
         guard let http = response as? HTTPURLResponse else {
             throw GeminiServiceError.invalidResponse
@@ -94,6 +128,7 @@ actor GeminiService {
     private func extractText(from data: Data) throws -> String {
         struct GeminiResponse: Decodable {
             struct Candidate: Decodable {
+                let finishReason: String?
                 struct Content: Decodable {
                     struct Part: Decodable { let text: String }
                     let parts: [Part]
@@ -102,17 +137,26 @@ actor GeminiService {
             }
             let candidates: [Candidate]
         }
+        
 
         let decoded = try JSONDecoder().decode(GeminiResponse.self, from: data)
 
         guard let text = decoded.candidates.first?.content.parts.first?.text else {
             throw GeminiServiceError.emptyResponse
         }
+        
+        #if DEBUG
+        print(decoded.candidates.first?.finishReason ?? "none")
+        print("Gemini text length:", text.count)
+        print(text)
+        #endif
+
         return text
     }
 
     private func parseThresholds(from raw: String) throws -> PlantThresholds {
         // Strip any accidental markdown fences Gemini might add despite instructions
+        
         let cleaned = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "```json", with: "")
