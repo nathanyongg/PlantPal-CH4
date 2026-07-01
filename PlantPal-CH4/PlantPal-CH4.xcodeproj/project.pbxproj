@@ -19,9 +19,22 @@
 		6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = SecretsExample.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		6C1481732FF4FB8C00A03EA5 /* Exceptions for "PlantPal-CH4" folder in "PlantPal-CH4" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 635908232FF39EFB0069A632 /* PlantPal-CH4 */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		635908262FF39EFB0069A632 /* PlantPal-CH4 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6C1481732FF4FB8C00A03EA5 /* Exceptions for "PlantPal-CH4" folder in "PlantPal-CH4" target */,
+			);
 			path = "PlantPal-CH4";
 			sourceTree = "<group>";
 		};
@@ -274,6 +287,7 @@
 				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PlantPal-CH4/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -306,6 +320,7 @@
 				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PlantPal-CH4/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
