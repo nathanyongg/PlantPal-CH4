@@ -39,10 +39,10 @@
 		6359081B2FF39EFB0069A632 = {
 			isa = PBXGroup;
 			children = (
+				6C1481092FF4F34C00A03EA5 /* .gitignore */,
 				6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */,
 				635908262FF39EFB0069A632 /* PlantPal-CH4 */,
 				635908252FF39EFB0069A632 /* Products */,
-				6C1481092FF4F34C00A03EA5 /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
