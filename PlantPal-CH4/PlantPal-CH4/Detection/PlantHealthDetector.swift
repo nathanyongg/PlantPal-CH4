@@ -2,80 +2,76 @@ import Foundation
 
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantClassifier protocol
-//
-// Both PlantHealthDetector (rule-based, today) and CoreMLClassifier
-// (trained model, later) conform to this. PlantHealthMonitor only
-// ever talks to this protocol — swapping detectors later means
-// changing one line of dependency injection, nothing else.
 // ══════════════════════════════════════════════════════════════
 
 protocol PlantClassifier: Sendable {
-    func assess(_ reading: SensorReading) -> [SensorStatus]
+    func assess(_ reading: SensorReading, for profile: PlantProfile) -> [SensorStatus]
 }
 
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantHealthDetector
 //
-// Rule-based classifier. Thresholds come from general houseplant
-// agronomy plus the Decision Tree splits found when analyzing the
-// training dataset (Soil_Moisture <= 70.68, Temp <= 28.47).
-//
-// Replace with CoreMLClassifier once you have real labelled data
-// from your own plant — see Detection/CoreMLClassifier.swift.
+// Now reads thresholds from PlantProfile (which came from Gemini)
+// instead of hardcoded values. Every plant gets its own species-
+// specific ranges — a cactus and a fern are assessed differently.
 // ══════════════════════════════════════════════════════════════
 
 struct PlantHealthDetector: PlantClassifier, Sendable {
 
-    func assess(_ reading: SensorReading) -> [SensorStatus] {
+    func assess(_ reading: SensorReading, for profile: PlantProfile) -> [SensorStatus] {
         [
-            assessSoilMoisture(reading.soilMoisture),
-            assessTemperature(reading.temperature),
-            assessHumidity(reading.humidity),
-            assessLight(reading.lightIntensity),
+            assessSoilMoisture(reading.soilMoisture, profile: profile),
+            assessTemperature(reading.temperature,   profile: profile),
+            assessHumidity(reading.humidity,         profile: profile),
+            assessLight(reading.lightIntensity,      profile: profile),
         ]
     }
 
-    // MARK: — Soil moisture (highest feature importance: 0.275)
+    // MARK: — Soil moisture
 
-    private func assessSoilMoisture(_ value: Double) -> SensorStatus {
+    private func assessSoilMoisture(_ value: Double, profile: PlantProfile) -> SensorStatus {
         let level: AlertLevel
         let reason: String
+        let warningBuffer = 10.0   // flag warning 10% before hitting the hard limit
 
-        if value < 20 {
+        if value < profile.minSoilMoisture - warningBuffer {
             level = .critical
-            reason = "critically dry — below 20%, roots are water stressed"
-        } else if value < 30 {
+            reason = "critically dry — below \(Int(profile.minSoilMoisture))% minimum for \(profile.name)"
+        } else if value < profile.minSoilMoisture {
             level = .warning
-            reason = "low — below 30%, approaching dry threshold"
-        } else if value > 80 {
+            reason = "low — approaching dry threshold for \(profile.name)"
+        } else if value > profile.maxSoilMoisture + warningBuffer {
             level = .warning
-            reason = "waterlogged — above 80%, risk of root rot"
+            reason = "waterlogged — above \(Int(profile.maxSoilMoisture))% maximum, risk of root rot"
         } else {
             level = .healthy
-            reason = "within range"
+            reason = "within range (\(Int(profile.minSoilMoisture))–\(Int(profile.maxSoilMoisture))%)"
         }
 
         return SensorStatus(name: "Soil moisture", value: value, unit: "%", level: level, reason: reason)
     }
 
-    // MARK: — Temperature (Decision Tree split at 28.47°C)
+    // MARK: — Temperature
 
-    private func assessTemperature(_ value: Double) -> SensorStatus {
+    private func assessTemperature(_ value: Double, profile: PlantProfile) -> SensorStatus {
         let level: AlertLevel
         let reason: String
 
-        if value > 35 {
+        if value > profile.maxTemperature + 5 {
             level = .critical
-            reason = "dangerously hot — above 35°C causes leaf damage"
-        } else if value > 30 {
+            reason = "dangerously hot — above \(Int(profile.maxTemperature + 5))°C for \(profile.name)"
+        } else if value > profile.maxTemperature {
             level = .warning
-            reason = "warm — above 30°C increases water demand"
-        } else if value < 15 {
+            reason = "warm — above ideal \(Int(profile.maxTemperature))°C maximum"
+        } else if value < profile.minTemperature - 3 {
             level = .critical
-            reason = "too cold — below 15°C causes chill stress"
+            reason = "too cold — below \(Int(profile.minTemperature - 3))°C causes chill stress"
+        } else if value < profile.minTemperature {
+            level = .warning
+            reason = "cool — below ideal \(Int(profile.minTemperature))°C minimum"
         } else {
             level = .healthy
-            reason = "within range"
+            reason = "within range (\(Int(profile.minTemperature))–\(Int(profile.maxTemperature))°C)"
         }
 
         return SensorStatus(name: "Temperature", value: value, unit: "°C", level: level, reason: reason)
@@ -83,39 +79,39 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
 
     // MARK: — Humidity
 
-    private func assessHumidity(_ value: Double) -> SensorStatus {
+    private func assessHumidity(_ value: Double, profile: PlantProfile) -> SensorStatus {
         let level: AlertLevel
         let reason: String
 
-        if value < 35 {
+        if value < profile.minHumidity {
             level = .warning
-            reason = "dry air — below 35% causes leaf tip browning"
-        } else if value > 85 {
+            reason = "dry air — below \(Int(profile.minHumidity))% minimum for \(profile.name)"
+        } else if value > profile.maxHumidity {
             level = .warning
-            reason = "very humid — above 85% promotes fungal growth"
+            reason = "too humid — above \(Int(profile.maxHumidity))%, risk of fungal growth"
         } else {
             level = .healthy
-            reason = "within range"
+            reason = "within range (\(Int(profile.minHumidity))–\(Int(profile.maxHumidity))%)"
         }
 
         return SensorStatus(name: "Humidity", value: value, unit: "%", level: level, reason: reason)
     }
 
-    // MARK: — Light intensity (Decision Tree splits near 13,714 / 14,758 lux)
+    // MARK: — Light
 
-    private func assessLight(_ value: Double) -> SensorStatus {
+    private func assessLight(_ value: Double, profile: PlantProfile) -> SensorStatus {
         let level: AlertLevel
         let reason: String
 
-        if value < 8_000 {
+        if value < profile.minLight {
             level = .warning
-            reason = "too dim — below 8,000 lux slows photosynthesis"
-        } else if value > 28_000 {
+            reason = "too dim — below \(Int(profile.minLight)) lux minimum for \(profile.name)"
+        } else if value > profile.maxLight {
             level = .warning
-            reason = "too bright — above 28,000 lux risks leaf scorch"
+            reason = "too bright — above \(Int(profile.maxLight)) lux, risk of leaf scorch"
         } else {
             level = .healthy
-            reason = "within range"
+            reason = "within range (\(Int(profile.minLight))–\(Int(profile.maxLight)) lux)"
         }
 
         return SensorStatus(name: "Light", value: value, unit: " lux", level: level, reason: reason)

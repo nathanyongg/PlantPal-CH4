@@ -347,7 +347,22 @@ struct PlantHealthTestView: View {
             lightIntensity: lightIntensity
         )
 
-        let statuses = detector.assess(reading)
+        // Build a temporary profile from the current slider-defined thresholds.
+        // In production this comes from SwiftData (populated by Gemini on setup).
+        // In the test harness we use generic houseplant ranges so the detector
+        // has something to check against.
+        let testProfile = PlantProfile(
+            name: "Test plant",
+            nickname: "Test",
+            thresholds: PlantThresholds(
+                minTemperature: 18,  maxTemperature: 30,
+                minHumidity:    40,  maxHumidity:    80,
+                minSoilMoisture: 30, maxSoilMoisture: 70,
+                minLight:    10_000, maxLight:    25_000
+            )
+        )
+
+        let statuses = detector.assess(reading, for: testProfile)
         let result = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
         detection = result
 

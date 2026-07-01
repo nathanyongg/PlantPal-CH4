@@ -21,30 +21,33 @@ final class PlantHealthMonitor {
 
     private var lastProcessedTimestamp: Date?
 
-    // Called by BGAppRefreshTask, or manually on pull-to-refresh
-    func checkPlantHealth() async {
+    // Called per plant by BGAppRefreshTask or manually.
+    // The caller (BackgroundTaskManager / dashboard) loops over all PlantProfiles.
+    func checkPlantHealth(for profile: PlantProfile) async {
         let reading: SensorReading
         do {
             reading = try await dataService.fetchLatestReading()
         } catch {
-            // ESP32 hasn't reported in — could be offline, WiFi down,
-            // or dead battery. Worth surfacing after enough silence.
             await handleStaleData(error: error)
             return
         }
 
-        // Skip if we've already processed this exact reading
         guard reading.timestamp != lastProcessedTimestamp else { return }
         lastProcessedTimestamp = reading.timestamp
 
         guard reading.isValid else {
-            // Sensor glitch — log it but don't alert or run the FM on garbage data
             print("Discarded invalid reading at \(reading.formattedTimestamp)")
             return
         }
 
-        let statuses = detector.assess(reading)
+        let statuses = detector.assess(reading, for: profile)
         let detection = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
+
+        // Update the profile's last known status so DashboardView stays current
+        profile.lastReadingAt = reading.timestamp
+        profile.lastStatus    = detection.overallLevel == .critical ? "critical"
+                              : detection.overallLevel == .warning  ? "warning"
+                              : "healthy"
 
         if detection.isHealthy {
             CSVLogger.log(reading: reading, detection: detection)
