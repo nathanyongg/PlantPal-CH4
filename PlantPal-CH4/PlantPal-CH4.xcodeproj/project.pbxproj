@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 6C1481092FF4F34C00A03EA5 /* .gitignore */; };
 		6C14816D2FF4F4ED00A03EA5 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		635908242FF39EFB0069A632 /* PlantPal-CH4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PlantPal-CH4.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C1481092FF4F34C00A03EA5 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -40,6 +42,7 @@
 				6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */,
 				635908262FF39EFB0069A632 /* PlantPal-CH4 */,
 				635908252FF39EFB0069A632 /* Products */,
+				6C1481092FF4F34C00A03EA5 /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -116,6 +119,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6C14816D2FF4F4ED00A03EA5 /* Secrets.xcconfig in Resources */,
+				6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
