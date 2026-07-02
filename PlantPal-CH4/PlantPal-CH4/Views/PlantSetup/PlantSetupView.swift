@@ -31,7 +31,6 @@ struct PlantSetupView: View {
     @State private var plantImage: UIImage?
     @State private var showingCamera = false
     @State private var showingPhotoOptions = false
-    @State private var showingPhotoPicker = false
     @State private var errorMessage: String?
 
     enum SetupPhase {
@@ -53,17 +52,21 @@ struct PlantSetupView: View {
                         }
                         .confirmationDialog(
                             "Choose Photo",
-                            isPresented: $showingPhotoOptions
+                            isPresented: $showingPhotoOptions,
+                            titleVisibility: .hidden
                         ) {
                             Button("Take Photo") {
                                 showingCamera = true
                             }
 
-                            Button("Choose from Library") {
-                                showingPhotoPicker = true
+                            PhotosPicker(
+                                selection: $selectedPhoto,
+                                matching: .images
+                            ) {
+                                Text("Choose from Library")
                             }
 
-                            Button("Cancel", role: .cancel) {}
+                            Button("Cancel", role: .cancel) { }
                         }
 
                         inputCard
@@ -77,27 +80,6 @@ struct PlantSetupView: View {
             }
             .navigationTitle("Add Plant")
             .navigationBarTitleDisplayMode(.inline)
-
-            .fullScreenCover(isPresented: $showingCamera) {
-                CameraView(image: $plantImage)
-            }
-
-            .photosPicker(
-                isPresented: $showingPhotoPicker,
-                selection: $selectedPhoto,
-                matching: .images
-            )
-
-            .onChange(of: selectedPhoto) { _, newItem in
-                Task {
-                    guard
-                        let data = try? await newItem?.loadTransferable(type: Data.self),
-                        let image = UIImage(data: data)
-                    else { return }
-
-                    plantImage = image
-                }
-            }
         }
     }
 
@@ -109,9 +91,6 @@ struct PlantSetupView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 170)
-                        .clipped()
                 } else {
                     RoundedRectangle(cornerRadius: 25)
                         .fill(.ultraThinMaterial)
@@ -137,18 +116,8 @@ struct PlantSetupView: View {
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .padding(18)
-        }
-        .fullScreenCover(isPresented: $showingCamera) {
-            CameraView(image: $plantImage)
-        }
-        .onChange(of: selectedPhoto) { _, newItem in
-            Task {
-                guard
-                    let data = try? await newItem?.loadTransferable(type: Data.self),
-                    let image = UIImage(data: data)
-                else { return }
-
-                plantImage = image
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView(image: $plantImage)
             }
         }
     }
@@ -163,7 +132,7 @@ struct PlantSetupView: View {
                 Spacer()
 
                 TextField(
-                    "My Mochi 🌱",
+                    "My Little Bolu Ketan",
                     text: $nickname
                 )
                 .multilineTextAlignment(.trailing)
@@ -189,11 +158,11 @@ struct PlantSetupView: View {
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .padding(.vertical, 20)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 28)
+            RoundedRectangle(cornerRadius: 36)
                 .fill(AppTheme.Colors.lavenderPanel)
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 4)
         )
     }
 
@@ -222,6 +191,7 @@ struct PlantSetupView: View {
                 )
                 .clipShape(Capsule())
         }
+        .padding(.horizontal, 55)
         .disabled(
             plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
         )
@@ -273,19 +243,16 @@ struct PlantSetupView: View {
         )
         profile.imageData = plantImage?.jpegData(compressionQuality: 0.85)
 
-        print("Inserting profile...")
-        
-        modelContext.insert(profile)
-
-        print("Inserting profile...")
         modelContext.insert(profile)
 
         do {
-            print("Saving context...")
             try modelContext.save()
-            print("Context saved!")
         } catch {
-            print("SAVE FAILED:", error)
+            errorMessage =
+                "Couldn't save plant profile: \(error.localizedDescription)"
+            isLoading = false
+            phase = .idle
+            return
         }
 
         // Step 3 — done

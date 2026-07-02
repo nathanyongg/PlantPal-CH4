@@ -10,9 +10,11 @@ import SwiftUI
 
 @main
 struct PlantPalApp: App {
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()
         }
+        .modelContainer(for: PlantProfile.self)
     }
 }

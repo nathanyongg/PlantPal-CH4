@@ -63,7 +63,7 @@ struct DashboardView: View {
 
                                 }
                                 .padding(.horizontal, 20)
-                                .padding(.top, 124)
+                                .padding(.top, 136)
                                 .safeAreaPadding(.bottom, 100)
                             }
                         }
@@ -84,11 +84,13 @@ struct DashboardView: View {
                 .navigationDestination(isPresented: $navigateToAddPlant) {
                     PlantSetupView()
                 }
+                
                 .searchable(
                     text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search plants"
                 )
+                
                 .onAppear {
                     print("DashboardView: plants count =", plants.count)
                 }
@@ -115,87 +117,6 @@ extension DashboardView {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-        }
-    }
-}
-
-// ══════════════════════════════════════════════════════════════
-// MARK: — PlantCardView
-// ══════════════════════════════════════════════════════════════
-
-struct PlantCardView: View {
-
-    let plant: PlantProfile
-
-    var body: some View {
-
-        VStack(spacing: 12) {
-
-            Group {
-                if let imageData = plant.imageData,
-                   let uiImage = UIImage(data: imageData) {
-
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-
-                } else {
-
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.green.opacity(0.15))
-                        .overlay {
-                            Image(systemName: "leaf.fill")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.green)
-                        }
-                }
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-
-            Text(plant.nickname)
-                .font(.title3.bold())
-                .foregroundStyle(Color.green.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-    }
-
-
-    private var statusColor: Color {
-
-        switch plant.alertLevel {
-
-        case .healthy:
-            return .green
-
-        case .warning:
-            return .orange
-
-        case .critical:
-            return .red
-        }
-    }
-
-    private var statusText: String {
-
-        switch plant.alertLevel {
-
-        case .healthy:
-            return "Healthy"
-
-        case .warning:
-            return "Needs Attention"
-
-        case .critical:
-            return "Critical"
         }
     }
 }
