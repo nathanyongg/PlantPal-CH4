@@ -31,6 +31,7 @@ struct PlantSetupView: View {
     @State private var plantImage: UIImage?
     @State private var showingCamera = false
     @State private var showingPhotoOptions = false
+    @State private var showingPhotoPicker = false
     @State private var errorMessage: String?
 
     enum SetupPhase {
@@ -45,48 +46,85 @@ struct PlantSetupView: View {
             AppBackground {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
-                        photoSection
+                        Button {
+                            showingPhotoOptions = true
+                        } label: {
+                            photoSection
+                        }
+                        .confirmationDialog(
+                            "Choose Photo",
+                            isPresented: $showingPhotoOptions
+                        ) {
+                            Button("Take Photo") {
+                                showingCamera = true
+                            }
+
+                            Button("Choose from Library") {
+                                showingPhotoPicker = true
+                            }
+
+                            Button("Cancel", role: .cancel) {}
+                        }
 
                         inputCard
                         
                         saveButton
                     }
                     .padding(.horizontal, 24)
-                    .padding(.top, 64)
+                    .padding(.top, 104)
                     .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Add Plant")
             .navigationBarTitleDisplayMode(.inline)
+
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView(image: $plantImage)
+            }
+
+            .photosPicker(
+                isPresented: $showingPhotoPicker,
+                selection: $selectedPhoto,
+                matching: .images
+            )
+
+            .onChange(of: selectedPhoto) { _, newItem in
+                Task {
+                    guard
+                        let data = try? await newItem?.loadTransferable(type: Data.self),
+                        let image = UIImage(data: data)
+                    else { return }
+
+                    plantImage = image
+                }
+            }
         }
     }
 
     private var photoSection: some View {
         ZStack(alignment: .bottomTrailing) {
 
-            Button {
-                showingPhotoOptions = true
-            } label: {
-
-                Group {
-                    if let image = plantImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        RoundedRectangle(cornerRadius: 25)
-                            .fill(.gray.opacity(0.2))
-                            .overlay {
+            Group {
+                if let image = plantImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    RoundedRectangle(cornerRadius: 25)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            VStack(spacing: 12){
                                 Image(systemName: "camera")
                                     .font(.largeTitle)
-                                    .foregroundStyle(.gray)
+                                    .foregroundStyle(.secondary)
+                                Text("Add a photo")
                             }
-                    }
+                        }
                 }
-                .frame(height: 420)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 28))
             }
+            .frame(height: 420)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 28))
 
             Button("Retake") {
                 showingPhotoOptions = true
@@ -96,6 +134,19 @@ struct PlantSetupView: View {
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .padding(18)
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(image: $plantImage)
+        }
+        .onChange(of: selectedPhoto) { _, newItem in
+            Task {
+                guard
+                    let data = try? await newItem?.loadTransferable(type: Data.self),
+                    let image = UIImage(data: data)
+                else { return }
+
+                plantImage = image
+            }
         }
     }
 
@@ -132,13 +183,14 @@ struct PlantSetupView: View {
             }
 
         }
-        .padding(24)
-        .background(.white)
+        .padding()
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .padding(20)
+        .padding(.vertical, 20)
         .background(
-            RoundedRectangle(cornerRadius: 36)
-                .fill(Color(red: 0.85, green: 0.73, blue: 0.92))
+            RoundedRectangle(cornerRadius: 28)
+                .fill(AppTheme.Colors.lavenderPanel)
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
         )
     }
 
@@ -167,7 +219,6 @@ struct PlantSetupView: View {
                 )
                 .clipShape(Capsule())
         }
-        .padding(.horizontal, 55)
         .disabled(
             plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
         )

@@ -9,7 +9,16 @@
 import SwiftUI
 
 struct AppBackground<Content: View>: View {
-    @ViewBuilder var content: Content
+
+    @Environment(\.colorScheme)
+    private var colorScheme
+
+    @ViewBuilder
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
 
     var body: some View {
         ZStack {
@@ -20,9 +29,13 @@ struct AppBackground<Content: View>: View {
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
+                .opacity(backgroundOpacity)
 
             content
         }
-        .safeAreaPadding(.top)
+    }
+
+    private var backgroundOpacity: Double {
+        colorScheme == .dark ? 0.06 : 0.9
     }
 }
