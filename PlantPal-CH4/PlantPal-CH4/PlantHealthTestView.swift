@@ -355,10 +355,10 @@ struct PlantHealthTestView: View {
             name: "Test plant",
             nickname: "Test",
             thresholds: PlantThresholds(
-                minTemperature: 18,  maxTemperature: 30,
-                minHumidity:    40,  maxHumidity:    80,
-                minSoilMoisture: 30, maxSoilMoisture: 70,
-                minLight:    10_000, maxLight:    25_000
+                minTemperatureC: 18,  maxTemperatureC: 30,
+                minHumidityPercent:    40,  maxHumidityPercent:    80,
+                minSoilMoisturePercent: 30, maxSoilMoisturePercent: 70,
+                minLightLux:    10_000, maxLightLux:    25_000
             )
         )
 

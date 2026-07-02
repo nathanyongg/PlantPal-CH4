@@ -1,3 +1,11 @@
+//
+//  CameraView.swift
+//  PlantPal-CH4
+//
+//  Created by Agustinus Juan Kurniawan on 02/07/26.
+//
+
+
 import SwiftUI
 
 struct CameraView: UIViewControllerRepresentable {

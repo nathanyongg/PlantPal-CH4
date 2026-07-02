@@ -23,5 +23,6 @@ struct AppBackground<Content: View>: View {
 
             content
         }
+        .safeAreaPadding(.top)
     }
 }

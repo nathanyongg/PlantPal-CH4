@@ -41,34 +41,136 @@ struct PlantSetupView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color("Color")
-                    .ignoresSafeArea()
-
-                Image("Background")
-                    .resizable()
-                    .scaledToFill()
-                    .opacity(0.18)
-                    .ignoresSafeArea()
-
+        ZStack {
+            AppBackground {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 30) {
-
+                    LazyVStack(spacing: 14) {
                         photoSection
 
                         inputCard
-
+                        
                         saveButton
                     }
                     .padding(.horizontal, 24)
-                    .padding(.top, 24)
+                    .padding(.top, 64)
                     .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Add Plant")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var photoSection: some View {
+        ZStack(alignment: .bottomTrailing) {
+
+            Button {
+                showingPhotoOptions = true
+            } label: {
+
+                Group {
+                    if let image = plantImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        RoundedRectangle(cornerRadius: 25)
+                            .fill(.gray.opacity(0.2))
+                            .overlay {
+                                Image(systemName: "camera")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.gray)
+                            }
+                    }
+                }
+                .frame(height: 420)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+            }
+
+            Button("Retake") {
+                showingPhotoOptions = true
+            }
+            .padding(.horizontal, 26)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .padding(18)
+        }
+    }
+
+    private var inputCard: some View {
+
+        VStack(spacing: 0) {
+
+            HStack {
+                Text("Nickname")
+
+                Spacer()
+
+                TextField(
+                    "My Mochi 🌱",
+                    text: $nickname
+                )
+                .multilineTextAlignment(.trailing)
+            }
+
+            Divider()
+                .padding(.vertical, 14)
+
+            HStack {
+
+                Text("Species")
+
+                Spacer()
+
+                TextField(
+                    "Monstera deliciosa",
+                    text: $plantName
+                )
+                .multilineTextAlignment(.trailing)
+            }
+
+        }
+        .padding(24)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 36)
+                .fill(Color(red: 0.85, green: 0.73, blue: 0.92))
+        )
+    }
+
+    private var saveButton: some View {
+
+        Button {
+            Task {
+                await setupPlant()
+            }
+        } label: {
+
+            Text("Save")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.83, green: 0.65, blue: 0.92),
+                            Color(red: 0.76, green: 0.60, blue: 0.88),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, 55)
+        .disabled(
+            plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
+        )
     }
 
     // MARK: — Phase label
@@ -115,6 +217,8 @@ struct PlantSetupView: View {
             nickname: displayNickname,
             thresholds: thresholds
         )
+        profile.imageData = plantImage?.jpegData(compressionQuality: 0.85)
+
         modelContext.insert(profile)
 
         do {

@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 // ══════════════════════════════════════════════════════════════
 // MARK: — DashboardView
@@ -11,187 +11,191 @@ import SwiftData
 
 struct DashboardView: View {
 
-    @Query(sort: \PlantProfile.addedAt) private var plants: [PlantProfile]
-    @State private var showingAddPlant = false
+    @Query(sort: \PlantProfile.addedAt)
+    private var plants: [PlantProfile]
 
-    // Derived counts
-    private var healthyCount:  Int { plants.filter { $0.alertLevel == .healthy  }.count }
-    private var warningCount:  Int { plants.filter { $0.alertLevel == .warning  }.count }
-    private var criticalCount: Int { plants.filter { $0.alertLevel == .critical }.count }
+    @State private var searchText = ""
+    @State private var navigateToAddPlant = false
 
-    // Sort: critical first, then warning, then healthy
-    private var sortedPlants: [PlantProfile] {
-        plants.sorted { $0.alertLevel > $1.alertLevel }
+    private var filteredPlants: [PlantProfile] {
+
+        let sorted = plants.sorted {
+            $0.alertLevel > $1.alertLevel
+        }
+
+        guard !searchText.isEmpty else {
+            return sorted
+        }
+
+        return sorted.filter {
+            $0.nickname.localizedCaseInsensitiveContains(searchText)
+                || $0.name.localizedCaseInsensitiveContains(searchText)
+        }
     }
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 20),
+        GridItem(.flexible(), spacing: 20)
+    ]
+    
     var body: some View {
+
         NavigationStack {
-            Group {
-                if plants.isEmpty {
-                    emptyState
-                } else {
-                    plantList
-                }
-            }
-            .navigationTitle("PlantPal")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAddPlant = true
-                    } label: {
-                        Image(systemName: "plus")
+            AppBackground {
+                ZStack(alignment: .bottomTrailing) {
+                    VStack(spacing: 16) {
+                        if filteredPlants.isEmpty {
+
+                            VStack {
+                                Spacer()
+                                emptyState
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        } else {
+
+                            ScrollView {
+                                LazyVGrid(columns: columns, spacing: 24) {
+                                    ForEach(filteredPlants) { plant in
+                                        PlantCardView(plant: plant)
+                                    }
+
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.top, 124)
+                                .safeAreaPadding(.bottom, 100)
+                            }
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $showingAddPlant) {
-                PlantSetupView()
+                .navigationTitle("Collections")
+                .navigationBarTitleDisplayMode(.large)
+
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            navigateToAddPlant = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                    }
+                }
+                .navigationDestination(isPresented: $navigateToAddPlant) {
+                    PlantSetupView()
+                }
+                .searchable(
+                    text: $searchText,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search plants"
+                )
+                .onAppear {
+                    print("DashboardView: plants count =", plants.count)
+                }
             }
         }
     }
+}
 
-    // MARK: — Empty state
+// MARK: Header
+extension DashboardView {
+    fileprivate var emptyState: some View {
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
+
             Image(systemName: "leaf.circle")
-                .font(.system(size: 64))
-                .foregroundStyle(.green.opacity(0.6))
-            Text("No plants yet")
+                .font(.system(size: 80))
+                .foregroundStyle(.green)
+
+            Text("No Plants Yet")
                 .font(.title2.bold())
-            Text("Tap + to add your first plant.\nWe'll look up its ideal conditions automatically.")
-                .font(.subheadline)
+
+            Text("Add your first plant to begin monitoring its health.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Add plant") { showingAddPlant = true }
-                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+
         }
-        .padding()
-    }
-
-    // MARK: — Plant list
-
-    private var plantList: some View {
-        List {
-            // Summary banner — only shown when something's wrong
-            if warningCount > 0 || criticalCount > 0 {
-                summaryBanner
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-
-            // Plants — critical first
-            ForEach(sortedPlants) { plant in
-                PlantRowView(plant: plant)
-                    .listRowBackground(
-                        plant.alertLevel == .critical
-                        ? Color.red.opacity(0.06)
-                        : Color.clear
-                    )
-            }
-        }
-        .listStyle(.insetGrouped)
-    }
-
-    // MARK: — Summary banner
-
-    private var summaryBanner: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                if criticalCount > 0 {
-                    summaryChip(
-                        count: criticalCount,
-                        label: criticalCount == 1 ? "needs help now" : "need help now",
-                        color: .red
-                    )
-                }
-                if warningCount > 0 {
-                    summaryChip(
-                        count: warningCount,
-                        label: warningCount == 1 ? "needs attention" : "need attention",
-                        color: .orange
-                    )
-                }
-                if healthyCount > 0 {
-                    summaryChip(
-                        count: healthyCount,
-                        label: healthyCount == 1 ? "is healthy" : "are healthy",
-                        color: .green
-                    )
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-        }
-        .background(.ultraThinMaterial)
-    }
-
-    private func summaryChip(count: Int, label: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Text("\(count)")
-                .font(.title3.bold())
-                .foregroundStyle(color)
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.trailing, 16)
     }
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARK: — PlantRowView
+// MARK: — PlantCardView
 // ══════════════════════════════════════════════════════════════
 
-struct PlantRowView: View {
+struct PlantCardView: View {
 
     let plant: PlantProfile
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Status indicator
-            Circle()
-                .fill(statusColor)
-                .frame(width: 10, height: 10)
-                .shadow(color: statusColor.opacity(0.4), radius: 3)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(plant.nickname)
-                    .font(.headline)
-                Text(plant.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        VStack(spacing: 12) {
 
-            Spacer()
+            Group {
+                if let imageData = plant.imageData,
+                   let uiImage = UIImage(data: imageData) {
 
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(statusLabel)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(statusColor)
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
 
-                if let lastRead = plant.lastReadingAt {
-                    Text(lastRead, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                } else {
+
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.green.opacity(0.15))
+                        .overlay {
+                            Image(systemName: "leaf.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.green)
+                        }
                 }
             }
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+
+            Text(plant.nickname)
+                .font(.title3.bold())
+                .foregroundStyle(Color.green.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+
         }
-        .padding(.vertical, 4)
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
     }
+
 
     private var statusColor: Color {
+
         switch plant.alertLevel {
-        case .healthy:  return .green
-        case .warning:  return .orange
-        case .critical: return .red
+
+        case .healthy:
+            return .green
+
+        case .warning:
+            return .orange
+
+        case .critical:
+            return .red
         }
     }
 
-    private var statusLabel: String {
+    private var statusText: String {
+
         switch plant.alertLevel {
-        case .healthy:  return "Healthy"
-        case .warning:  return "Warning"
-        case .critical: return "Critical"
+
+        case .healthy:
+            return "Healthy"
+
+        case .warning:
+            return "Needs Attention"
+
+        case .critical:
+            return "Critical"
         }
     }
 }
@@ -204,24 +208,57 @@ struct PlantRowView: View {
 // needs to be accessible here for sortedPlants.
 
 #Preview {
-    let config    = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: PlantProfile.self, configurations: config)
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: PlantProfile.self,
+        configurations: config
+    )
 
     let monstera = PlantProfile(
-        name: "Monstera deliciosa", nickname: "Living room",
-        thresholds: PlantThresholds(minTemperature: 18, maxTemperature: 30, minHumidity: 50, maxHumidity: 80, minSoilMoisture: 40, maxSoilMoisture: 70, minLight: 10000, maxLight: 25000)
+        name: "Monstera deliciosa",
+        nickname: "Living room",
+        thresholds: PlantThresholds(
+            minTemperatureC: 18,
+            maxTemperatureC: 30,
+            minHumidityPercent: 50,
+            maxHumidityPercent: 80,
+            minSoilMoisturePercent: 40,
+            maxSoilMoisturePercent: 70,
+            minLightLux: 10000,
+            maxLightLux: 25000
+        )
     )
     monstera.lastStatus = "critical"
 
     let pothos = PlantProfile(
-        name: "Epipremnum aureum", nickname: "Kitchen pothos",
-        thresholds: PlantThresholds(minTemperature: 15, maxTemperature: 30, minHumidity: 40, maxHumidity: 70, minSoilMoisture: 30, maxSoilMoisture: 60, minLight: 5000, maxLight: 20000)
+        name: "Epipremnum aureum",
+        nickname: "Kitchen pothos",
+        thresholds: PlantThresholds(
+            minTemperatureC: 15,
+            maxTemperatureC: 30,
+            minHumidityPercent: 40,
+            maxHumidityPercent: 70,
+            minSoilMoisturePercent: 30,
+            maxSoilMoisturePercent: 60,
+            minLightLux: 5000,
+            maxLightLux: 20000
+        )
     )
     pothos.lastStatus = "warning"
 
     let cactus = PlantProfile(
-        name: "Cereus hildmannianus", nickname: "Desk cactus",
-        thresholds: PlantThresholds(minTemperature: 20, maxTemperature: 38, minHumidity: 10, maxHumidity: 40, minSoilMoisture: 5, maxSoilMoisture: 20, minLight: 20000, maxLight: 50000)
+        name: "Cereus hildmannianus",
+        nickname: "Desk cactus",
+        thresholds: PlantThresholds(
+            minTemperatureC: 20,
+            maxTemperatureC: 38,
+            minHumidityPercent: 10,
+            maxHumidityPercent: 40,
+            minSoilMoisturePercent: 5,
+            maxSoilMoisturePercent: 20,
+            minLightLux: 20000,
+            maxLightLux: 50000
+        )
     )
     cactus.lastStatus = "healthy"
 

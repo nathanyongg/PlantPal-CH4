@@ -16,62 +16,41 @@ actor GeminiService {
     static let shared = GeminiService()
 
     private var apiKey: String { SecretsManager.geminiAPIKey }
-    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15
-        config.timeoutIntervalForResource = 30
-        return URLSession(configuration: config)
-    }()
+    private let baseURL =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    private let session = URLSession.shared
 
-    func fetchThresholds(for plantName: String) async throws -> PlantThresholds {
-
+    func fetchThresholds(for plantName: String) async throws -> PlantThresholds
+    {
         let prompt = buildPrompt(for: plantName)
-
-        for attempt in 0..<3 {
-            do {
-                let raw = try await callGemini(prompt: prompt)
-                return try parseThresholds(from: raw)
-
-            } catch GeminiServiceError.apiError(let code)
-                where code == 429 || code == 500 || code == 502 || code == 503 {
-
-                if attempt == 2 {
-                    throw GeminiServiceError.apiError(code)
-                }
-
-                try await Task.sleep(for: .seconds(2))
-
-            } catch {
-                throw error
-            }
-        }
-
-        throw GeminiServiceError.invalidResponse
+        let raw = try await callGemini(prompt: prompt)
+        return try parseThresholds(from: raw)
     }
 
     // MARK: — Prompt
 
     private func buildPrompt(for plantName: String) -> String {
         """
-        Return the ideal care thresholds for \(plantName).
+        You are a plant care expert. Return ONLY a valid JSON object — no markdown,
+        no explanation, no extra text. Just the raw JSON.
 
-        Respond with ONLY this JSON object:
-
+        Return the ideal environmental conditions for \(plantName) as:
         {
-          "minTemperature": 0,
-          "maxTemperature": 0,
-          "minHumidity": 0,
-          "maxHumidity": 0,
-          "minSoilMoisture": 0,
-          "maxSoilMoisture": 0,
-          "minLight": 0,
-          "maxLight": 0
+          "minTemperatureC": <number in Celsius>,
+          "maxTemperatureC": <number in Celsius>,
+          "minHumidityPercent": <number as percentage 0-100>,
+          "maxHumidityPercent": <number as percentage 0-100>,
+          "minSoilMoisturePercent": <number as percentage 0-100>,
+          "maxSoilMoisturePercent": <number as percentage 0-100>,
+          "minLightLux": <number in lux>,
+          "maxLightLux": <number in lux>
         }
 
-        All values must be numbers.
+        Use the midpoint of healthy ranges. If the plant is unknown, use
+        average tropical houseplant values as a safe fallback.
         """
     }
+
     // MARK: — Gemini API call
 
     private func callGemini(prompt: String) async throws -> String {
@@ -86,13 +65,7 @@ actor GeminiService {
 
         let body: [String: Any] = [
             "contents": [
-                [
-                    "parts": [
-                        [
-                            "text": prompt
-                        ]
-                    ]
-                ]
+                ["parts": [["text": prompt]]]
             ],
             "generationConfig": [
                 "temperature": 0,
@@ -100,17 +73,16 @@ actor GeminiService {
                 "responseMimeType": "application/json",
                 "thinkingConfig": [
                     "thinkingBudget": 0
-                ]
-            ]
+                ],
+            ],
         ]
 
         var request = URLRequest(url: url)
-        request.httpMethod  = "POST"
-        request.httpBody    = try JSONSerialization.data(withJSONObject: body)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let (data, response) = try await session.data(for: request)
-        print(String(data: data, encoding: .utf8)!)
 
         guard let http = response as? HTTPURLResponse else {
             throw GeminiServiceError.invalidResponse
@@ -128,7 +100,6 @@ actor GeminiService {
     private func extractText(from data: Data) throws -> String {
         struct GeminiResponse: Decodable {
             struct Candidate: Decodable {
-                let finishReason: String?
                 struct Content: Decodable {
                     struct Part: Decodable { let text: String }
                     let parts: [Part]
@@ -137,27 +108,22 @@ actor GeminiService {
             }
             let candidates: [Candidate]
         }
-        
 
         let decoded = try JSONDecoder().decode(GeminiResponse.self, from: data)
 
-        guard let text = decoded.candidates.first?.content.parts.first?.text else {
+        guard let text = decoded.candidates.first?.content.parts.first?.text
+        else {
             throw GeminiServiceError.emptyResponse
         }
         
-        #if DEBUG
-        print(decoded.candidates.first?.finishReason ?? "none")
-        print("Gemini text length:", text.count)
         print(text)
-        #endif
-
         return text
     }
 
     private func parseThresholds(from raw: String) throws -> PlantThresholds {
         // Strip any accidental markdown fences Gemini might add despite instructions
-        
-        let cleaned = raw
+        let cleaned =
+            raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
@@ -182,11 +148,13 @@ enum GeminiServiceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL:        return "Invalid Gemini API URL."
-        case .invalidResponse:   return "Couldn't reach Gemini API."
-        case .apiError(let c):   return "Gemini API returned error \(c). Check your API key."
-        case .emptyResponse:     return "Gemini returned an empty response."
-        case .parseError:        return "Couldn't parse thresholds from Gemini response."
+        case .invalidURL: return "Invalid Gemini API URL."
+        case .invalidResponse: return "Couldn't reach Gemini API."
+        case .apiError(let c):
+            return "Gemini API returned error \(c). Check your API key."
+        case .emptyResponse: return "Gemini returned an empty response."
+        case .parseError:
+            return "Couldn't parse thresholds from Gemini response."
         }
     }
 }

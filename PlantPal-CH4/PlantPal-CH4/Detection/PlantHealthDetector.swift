@@ -34,18 +34,18 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
         let reason: String
         let warningBuffer = 10.0   // flag warning 10% before hitting the hard limit
 
-        if value < profile.minSoilMoisture - warningBuffer {
+        if value < profile.minSoilMoisturePercent - warningBuffer {
             level = .critical
-            reason = "critically dry — below \(Int(profile.minSoilMoisture))% minimum for \(profile.name)"
-        } else if value < profile.minSoilMoisture {
+            reason = "critically dry — below \(Int(profile.minSoilMoisturePercent))% minimum for \(profile.name)"
+        } else if value < profile.minSoilMoisturePercent {
             level = .warning
             reason = "low — approaching dry threshold for \(profile.name)"
-        } else if value > profile.maxSoilMoisture + warningBuffer {
+        } else if value > profile.maxSoilMoisturePercent + warningBuffer {
             level = .warning
-            reason = "waterlogged — above \(Int(profile.maxSoilMoisture))% maximum, risk of root rot"
+            reason = "waterlogged — above \(Int(profile.maxSoilMoisturePercent))% maximum, risk of root rot"
         } else {
             level = .healthy
-            reason = "within range (\(Int(profile.minSoilMoisture))–\(Int(profile.maxSoilMoisture))%)"
+            reason = "within range (\(Int(profile.minSoilMoisturePercent))–\(Int(profile.maxSoilMoisturePercent))%)"
         }
 
         return SensorStatus(name: "Soil moisture", value: value, unit: "%", level: level, reason: reason)
@@ -57,21 +57,21 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
         let level: AlertLevel
         let reason: String
 
-        if value > profile.maxTemperature + 5 {
+        if value > profile.maxTemperatureC + 5 {
             level = .critical
-            reason = "dangerously hot — above \(Int(profile.maxTemperature + 5))°C for \(profile.name)"
-        } else if value > profile.maxTemperature {
+            reason = "dangerously hot — above \(Int(profile.maxTemperatureC + 5))°C for \(profile.name)"
+        } else if value > profile.maxTemperatureC {
             level = .warning
-            reason = "warm — above ideal \(Int(profile.maxTemperature))°C maximum"
-        } else if value < profile.minTemperature - 3 {
+            reason = "warm — above ideal \(Int(profile.maxTemperatureC))°C maximum"
+        } else if value < profile.minTemperatureC - 3 {
             level = .critical
-            reason = "too cold — below \(Int(profile.minTemperature - 3))°C causes chill stress"
-        } else if value < profile.minTemperature {
+            reason = "too cold — below \(Int(profile.minTemperatureC - 3))°C causes chill stress"
+        } else if value < profile.minTemperatureC {
             level = .warning
-            reason = "cool — below ideal \(Int(profile.minTemperature))°C minimum"
+            reason = "cool — below ideal \(Int(profile.minTemperatureC))°C minimum"
         } else {
             level = .healthy
-            reason = "within range (\(Int(profile.minTemperature))–\(Int(profile.maxTemperature))°C)"
+            reason = "within range (\(Int(profile.minTemperatureC))–\(Int(profile.maxTemperatureC))°C)"
         }
 
         return SensorStatus(name: "Temperature", value: value, unit: "°C", level: level, reason: reason)
@@ -83,15 +83,15 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
         let level: AlertLevel
         let reason: String
 
-        if value < profile.minHumidity {
+        if value < profile.minHumidityPercent {
             level = .warning
-            reason = "dry air — below \(Int(profile.minHumidity))% minimum for \(profile.name)"
-        } else if value > profile.maxHumidity {
+            reason = "dry air — below \(Int(profile.minHumidityPercent))% minimum for \(profile.name)"
+        } else if value > profile.maxHumidityPercent {
             level = .warning
-            reason = "too humid — above \(Int(profile.maxHumidity))%, risk of fungal growth"
+            reason = "too humid — above \(Int(profile.maxHumidityPercent))%, risk of fungal growth"
         } else {
             level = .healthy
-            reason = "within range (\(Int(profile.minHumidity))–\(Int(profile.maxHumidity))%)"
+            reason = "within range (\(Int(profile.minHumidityPercent))–\(Int(profile.maxHumidityPercent))%)"
         }
 
         return SensorStatus(name: "Humidity", value: value, unit: "%", level: level, reason: reason)
@@ -103,15 +103,15 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
         let level: AlertLevel
         let reason: String
 
-        if value < profile.minLight {
+        if value < profile.minLightLux {
             level = .warning
-            reason = "too dim — below \(Int(profile.minLight)) lux minimum for \(profile.name)"
-        } else if value > profile.maxLight {
+            reason = "too dim — below \(Int(profile.minLightLux)) lux minimum for \(profile.name)"
+        } else if value > profile.maxLightLux {
             level = .warning
-            reason = "too bright — above \(Int(profile.maxLight)) lux, risk of leaf scorch"
+            reason = "too bright — above \(Int(profile.maxLightLux)) lux, risk of leaf scorch"
         } else {
             level = .healthy
-            reason = "within range (\(Int(profile.minLight))–\(Int(profile.maxLight)) lux)"
+            reason = "within range (\(Int(profile.minLightLux))–\(Int(profile.maxLightLux)) lux)"
         }
 
         return SensorStatus(name: "Light", value: value, unit: " lux", level: level, reason: reason)
