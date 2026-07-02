@@ -1,13 +1,16 @@
 import Foundation
 import UserNotifications
 import BackgroundTasks
+import SwiftData
 
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantHealthMonitor
 //
-// Orchestrator. Previously triggered by a BLE read completing —
-// now triggered by a scheduled pull from PlantDataService.
-// Everything downstream of "I have a SensorReading" is unchanged.
+// Orchestrator. Pulls the latest sensor reading from the cloud,
+// checks it against PlantProfile thresholds (Gemini-fetched,
+// persisted in SwiftData), and either stays silent (healthy)
+// or invokes the Foundation Model for an explanation and fires
+// a push notification (warning / critical).
 // ══════════════════════════════════════════════════════════════
 
 @MainActor
@@ -21,8 +24,8 @@ final class PlantHealthMonitor {
 
     private var lastProcessedTimestamp: Date?
 
-    // Called per plant by BGAppRefreshTask or manually.
-    // The caller (BackgroundTaskManager / dashboard) loops over all PlantProfiles.
+    // Called per plant by BGAppRefreshTask or manually from the dashboard.
+    // The caller loops over all PlantProfiles from SwiftData.
     func checkPlantHealth(for profile: PlantProfile) async {
         let reading: SensorReading
         do {
@@ -40,19 +43,17 @@ final class PlantHealthMonitor {
             return
         }
 
-        let statuses = detector.assess(reading, for: profile)
+        let statuses  = detector.assess(reading, for: profile)
         let detection = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
 
-        // Update the profile's last known status so DashboardView stays current
+        // Persist latest status into SwiftData so DashboardView updates
         profile.lastReadingAt = reading.timestamp
         profile.lastStatus    = detection.overallLevel == .critical ? "critical"
                               : detection.overallLevel == .warning  ? "warning"
                               : "healthy"
 
-        if detection.isHealthy {
-            CSVLogger.log(reading: reading, detection: detection)
-            return
-        }
+        // Healthy — nothing to do, SwiftData already updated above
+        guard !detection.isHealthy else { return }
 
         await handleUnhealthy(reading: reading, detection: detection)
     }
@@ -62,44 +63,37 @@ final class PlantHealthMonitor {
     private func handleUnhealthy(reading: SensorReading, detection: DetectionResult) async {
         guard PlantExplainer.isAvailable() else {
             await notifyFallback(detection: detection)
-            CSVLogger.log(reading: reading, detection: detection)
             return
         }
 
         do {
             let explanation = try await explainer.explain(reading: reading, detection: detection)
             await notify(detection: detection, explanation: explanation)
-            CSVLogger.log(reading: reading, detection: detection, cause: explanation.cause)
         } catch {
             await notifyFallback(detection: detection)
-            CSVLogger.log(reading: reading, detection: detection)
         }
     }
 
     // MARK: — Stale data handling
     //
-    // If the ESP32 hasn't reported in a while, the WiFi connection
-    // or device itself may have failed — that's worth telling the
-    // user about too, separate from a plant health issue.
+    // If the ESP32 hasn't reported in a while (WiFi down, dead battery)
+    // notify the user — separately from a plant health issue.
 
     private var lastFetchFailureNotified: Date?
 
     private func handleStaleData(error: Error) async {
-        // Don't spam — only notify about connectivity once every 6 hours
-        if let last = lastFetchFailureNotified, Date().timeIntervalSince(last) < 6 * 3600 {
-            return
-        }
+        if let last = lastFetchFailureNotified,
+           Date().timeIntervalSince(last) < 6 * 3600 { return }
         lastFetchFailureNotified = Date()
 
-        let content = UNMutableNotificationContent()
-        content.title = "Can't reach your plant sensor"
-        content.body = error.localizedDescription
-        content.sound = .default
+        let content       = UNMutableNotificationContent()
+        content.title     = "Can't reach your plant sensor"
+        content.body      = error.localizedDescription
+        content.sound     = .default
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
+            content: content, trigger: nil
         )
         try? await UNUserNotificationCenter.current().add(request)
     }
@@ -107,68 +101,32 @@ final class PlantHealthMonitor {
     // MARK: — Notifications
 
     private func notify(detection: DetectionResult, explanation: PlantExplanation) async {
-        let content = UNMutableNotificationContent()
-        content.title = explanation.notificationTitle
-        content.body = explanation.notificationBody
-        content.sound = explanation.isCritical ? .defaultCritical : .default
+        let content       = UNMutableNotificationContent()
+        content.title     = explanation.notificationTitle
+        content.body      = explanation.notificationBody
+        content.sound     = explanation.isCritical ? .defaultCritical : .default
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
+            content: content, trigger: nil
         )
         try? await UNUserNotificationCenter.current().add(request)
     }
 
     private func notifyFallback(detection: DetectionResult) async {
-        let content = UNMutableNotificationContent()
-        content.title = detection.overallLevel == .critical
-            ? "Your plant needs help now"
-            : "Plant check-in"
-        content.body = detection.issuesSummary.replacingOccurrences(of: "- ", with: "")
-        content.sound = detection.overallLevel == .critical ? .defaultCritical : .default
+        let content       = UNMutableNotificationContent()
+        content.title     = detection.overallLevel == .critical
+                            ? "Your plant needs help now"
+                            : "Plant check-in"
+        content.body      = detection.issuesSummary
+            .replacingOccurrences(of: "- ", with: "")
+        content.sound     = detection.overallLevel == .critical
+                            ? .defaultCritical : .default
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
+            content: content, trigger: nil
         )
         try? await UNUserNotificationCenter.current().add(request)
     }
 }
-
-// ══════════════════════════════════════════════════════════════
-// MARK: — Background Task Registration
-//
-// BGAppRefreshTask is opportunistic — iOS decides when to actually
-// run it based on usage patterns, NOT a strict 15-minute clock.
-// For real-time alerting, pair this with server-side push (see note
-// in the Networking layer) rather than relying on this alone.
-// ══════════════════════════════════════════════════════════════
-
-// In your App struct or AppDelegate:
-//
-// func application(_ application: UIApplication,
-//                  didFinishLaunchingWithOptions...) -> Bool {
-//
-//     CSVLogger.setup()
-//
-//     BGTaskScheduler.shared.register(
-//         forTaskWithIdentifier: "com.yourapp.plantcheck",
-//         using: nil
-//     ) { task in
-//         Task {
-//             await PlantHealthMonitor.shared.checkPlantHealth()
-//             task.setTaskCompleted(success: true)
-//             scheduleNextPlantCheck()
-//         }
-//     }
-//     scheduleNextPlantCheck()
-//     return true
-// }
-//
-// func scheduleNextPlantCheck() {
-//     let request = BGAppRefreshTaskRequest(identifier: "com.yourapp.plantcheck")
-//     request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
-//     try? BGTaskScheduler.shared.submit(request)
-// }

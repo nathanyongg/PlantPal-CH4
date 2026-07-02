@@ -26,37 +26,42 @@ final class PlantProfile {
     var addedAt: Date
 
     // Gemini-fetched thresholds — stored so runtime is offline
-    var minTemperature: Double   // °C
-    var maxTemperature: Double
-    var minHumidity: Double      // %
-    var maxHumidity: Double
-    var minSoilMoisture: Double  // %
-    var maxSoilMoisture: Double
-    var minLight: Double         // lux
-    var maxLight: Double
+    var minTemperatureC: Double   // °C
+    var maxTemperatureC: Double
+    var minHumidityPercent: Double      // %
+    var maxHumidityPercent: Double
+    var minSoilMoisturePercent: Double  // %
+    var maxSoilMoisturePercent: Double
+    var minLightLux: Double         // lux
+    var maxLightLux: Double
 
     // Last known sensor reading — used for dashboard display
     var lastReadingAt: Date?
     var lastStatus: String       // "healthy" | "warning" | "critical"
+    
+    @Attribute(.externalStorage)
+    var imageData: Data?
 
     init(
         name: String,
         nickname: String,
-        thresholds: PlantThresholds
+        thresholds: PlantThresholds,
+        imageData: Data? = nil
     ) {
         self.name         = name
         self.nickname     = nickname
         self.addedAt      = Date()
         self.lastStatus   = "healthy"
 
-        self.minTemperature  = thresholds.minTemperature
-        self.maxTemperature  = thresholds.maxTemperature
-        self.minHumidity     = thresholds.minHumidity
-        self.maxHumidity     = thresholds.maxHumidity
-        self.minSoilMoisture = thresholds.minSoilMoisture
-        self.maxSoilMoisture = thresholds.maxSoilMoisture
-        self.minLight        = thresholds.minLight
-        self.maxLight        = thresholds.maxLight
+        self.minTemperatureC  = thresholds.minTemperatureC
+        self.maxTemperatureC  = thresholds.maxTemperatureC
+        self.minHumidityPercent     = thresholds.minHumidityPercent
+        self.maxHumidityPercent     = thresholds.maxHumidityPercent
+        self.minSoilMoisturePercent = thresholds.minSoilMoisturePercent
+        self.maxSoilMoisturePercent = thresholds.maxSoilMoisturePercent
+        self.minLightLux        = thresholds.minLightLux
+        self.maxLightLux      = thresholds.maxLightLux
+        self.imageData = imageData
     }
 }
 
@@ -69,14 +74,17 @@ final class PlantProfile {
 // ══════════════════════════════════════════════════════════════
 
 struct PlantThresholds: Codable {
-    var minTemperature: Double
-    var maxTemperature: Double
-    var minHumidity: Double
-    var maxHumidity: Double
-    var minSoilMoisture: Double
-    var maxSoilMoisture: Double
-    var minLight: Double
-    var maxLight: Double
+    let minTemperatureC: Double
+    let maxTemperatureC: Double
+
+    let minHumidityPercent: Double
+    let maxHumidityPercent: Double
+
+    let minSoilMoisturePercent: Double
+    let maxSoilMoisturePercent: Double
+
+    let minLightLux: Double
+    let maxLightLux: Double
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -95,14 +103,14 @@ extension PlantProfile {
 
     func thresholds() -> PlantThresholds {
         PlantThresholds(
-            minTemperature:  minTemperature,
-            maxTemperature:  maxTemperature,
-            minHumidity:     minHumidity,
-            maxHumidity:     maxHumidity,
-            minSoilMoisture: minSoilMoisture,
-            maxSoilMoisture: maxSoilMoisture,
-            minLight:        minLight,
-            maxLight:        maxLight
+            minTemperatureC:  minTemperatureC,
+            maxTemperatureC:  maxTemperatureC,
+            minHumidityPercent:     minHumidityPercent,
+            maxHumidityPercent:     maxHumidityPercent,
+            minSoilMoisturePercent: minSoilMoisturePercent,
+            maxSoilMoisturePercent: maxSoilMoisturePercent,
+            minLightLux:        minLightLux,
+            maxLightLux:        maxLightLux
         )
     }
 }
