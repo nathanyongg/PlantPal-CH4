@@ -19,7 +19,7 @@ struct PlantExplanation {
     @Guide(description: "The single most important action the user should take right now. One short sentence, imperative mood (e.g. 'Water your plant now').")
     var action: String
 
-    @Guide(description: "Urgency level. Must be exactly one of: 'now', 'today', 'monitor'.")
+    @Guide(description: "Urgency level. Must be exactly one of: 'Now', 'Today', 'Monitor'.")
     var urgency: String
 
     @Guide(description: "A short, friendly notification title. Max 6 words. No emoji.")
@@ -39,6 +39,6 @@ extension PlantExplanation {
 
     /// Maps urgency string to a UNNotificationSound
     var isCritical: Bool {
-        urgency == "now"
+        urgency == "Now"
     }
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct PlantCardView: View {
 
@@ -95,4 +96,9 @@ extension PlantCardView {
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
+}
+
+#Preview {
+    PlantSetupView()
+        .modelContainer(for: PlantProfile.self, inMemory: true)
 }
