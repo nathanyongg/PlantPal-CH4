@@ -18,7 +18,7 @@ import SwiftUI
 // after this runs offline against the saved thresholds.
 // ══════════════════════════════════════════════════════════════
 
-struct PlantSetupView: View {
+struct PlantSetupView3: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss

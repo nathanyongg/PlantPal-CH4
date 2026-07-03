@@ -252,7 +252,7 @@ struct PlantHealthTestView: View {
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 8) {
-                labeledText("Notification title", explanation.notificationTitle)
+                labeledText("Notification Title", explanation.notificationTitle)
                 labeledText("Cause", explanation.cause)
                 labeledText("Action", explanation.action)
                 labeledText("Urgency", explanation.urgency)
