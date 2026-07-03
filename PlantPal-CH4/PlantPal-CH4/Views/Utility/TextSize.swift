@@ -10,6 +10,7 @@ import SwiftUI
 
 enum TextSize: String, CaseIterable, Identifiable {
 
+    case system
     case small
     case medium
     case large
@@ -17,38 +18,49 @@ enum TextSize: String, CaseIterable, Identifiable {
     var id: Self { self }
 
     var title: String {
-        rawValue.capitalized
-    }
-
-    var scale: CGFloat {
         switch self {
+        case .system:
+            return "System"
+
         case .small:
-            return 0.9
+            return "Small"
 
         case .medium:
-            return 1.0
+            return "Medium"
 
         case .large:
-            return 1.2
+            return "Large"
         }
     }
-}
 
-struct ScaledFont: ViewModifier {
+    // Maps to Dynamic Type so text reflows properly instead of
+    // being visually scaled. `nil` follows the device setting,
+    // which is what VoiceOver / low-vision users rely on.
+    var dynamicTypeSize: DynamicTypeSize? {
+        switch self {
+        case .system:
+            return nil
 
-    @AppStorage("textSize")
-    private var textSize: TextSize = .medium
+        case .small:
+            return .small
 
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(textSize.scale)
+        case .medium:
+            return .large
+
+        case .large:
+            return .xxxLarge
+        }
     }
 }
 
 extension View {
 
-    func appTextScale() -> some View {
-        modifier(ScaledFont())
+    @ViewBuilder
+    func appTextSize(_ size: TextSize) -> some View {
+        if let dynamicTypeSize = size.dynamicTypeSize {
+            self.dynamicTypeSize(dynamicTypeSize)
+        } else {
+            self
+        }
     }
 }
-

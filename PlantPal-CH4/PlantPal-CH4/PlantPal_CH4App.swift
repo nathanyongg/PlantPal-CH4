@@ -14,11 +14,15 @@ struct PlantPalApp: App {
     @AppStorage("appearance")
     private var appearance: Appearance = .system
 
+    @AppStorage("textSize")
+    private var textSize: TextSize = .system
+
     var body: some Scene {
 
         WindowGroup {
             RootTabView()
                 .preferredColorScheme(appearance.colorScheme)
+                .appTextSize(textSize)
                 .modelContainer(for: PlantProfile.self)
         }
     }

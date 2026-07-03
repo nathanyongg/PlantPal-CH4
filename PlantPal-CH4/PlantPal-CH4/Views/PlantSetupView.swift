@@ -61,24 +61,11 @@ struct PlantSetupView: View {
                             Button("Cancel", role: .cancel) {}
                         }
 
-                        .confirmationDialog(
-                            "Choose Photo",
-                            isPresented: $showingPhotoOptions
-                        ) {
-                            Button("Take Photo") {
-                                showingCamera = true
-                            }
-
-                            Button("Choose from Library") {
-                                showingPhotoPicker = true
-                            }
-
-                            Button("Cancel", role: .cancel) {}
-                        }
-
                     inputCard
 
                     saveButton
+
+                    statusSection
                 }
                 .padding(.horizontal, 24)
 //                .padding(.top, 104)
@@ -142,6 +129,12 @@ struct PlantSetupView: View {
         .onTapGesture {
             showingPhotoOptions = true
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            plantImage == nil ? "Add a photo" : "Plant photo"
+        )
+        .accessibilityHint("Opens the camera or photo library")
+        .accessibilityAddTraits(.isButton)
         .overlay(alignment: .bottomTrailing) {
             Button(plantImage == nil ? "Add Photo" : "Retake") {
                 showingPhotoOptions = true
@@ -168,6 +161,7 @@ struct PlantSetupView: View {
                     text: $nickname
                 )
                 .multilineTextAlignment(.trailing)
+                .accessibilityLabel("Nickname")
             }
 
             Divider()
@@ -184,6 +178,7 @@ struct PlantSetupView: View {
                     text: $plantName
                 )
                 .multilineTextAlignment(.trailing)
+                .accessibilityLabel("Species")
             }
 
         }
@@ -206,26 +201,44 @@ struct PlantSetupView: View {
             }
         } label: {
 
-            Text("Save")
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.83, green: 0.65, blue: 0.92),
-                            Color(red: 0.76, green: 0.60, blue: 0.88),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .clipShape(Capsule())
+            HStack(spacing: 10) {
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                }
+
+                Text(isLoading ? "Saving…" : "Save")
+                    .font(.headline)
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 56)
+            .background(AppTheme.Colors.secondaryAccent)
+            .clipShape(Capsule())
         }
         .disabled(
             plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
         )
+        .accessibilityLabel(isLoading ? "Saving plant" : "Save plant")
+        .accessibilityHint("Looks up care requirements and adds the plant")
+    }
+
+    private var statusSection: some View {
+
+        Group {
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(AppTheme.Typography.subtitle)
+                    .foregroundStyle(AppTheme.Colors.critical)
+                    .multilineTextAlignment(.center)
+            } else if isLoading || phase == .done {
+                Text(phaseLabel)
+                    .font(AppTheme.Typography.subtitle)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: — Phase label
@@ -262,6 +275,9 @@ struct PlantSetupView: View {
             errorMessage = error.localizedDescription
             isLoading = false
             phase = .idle
+            SpeechManager.shared.speak(
+                "Could not add plant. \(error.localizedDescription)"
+            )
             return
         }
 
@@ -288,6 +304,7 @@ struct PlantSetupView: View {
         // Step 3 — done
         phase = .done
         isLoading = false
+        SpeechManager.shared.speak("\(displayNickname) added successfully")
 
         try? await Task.sleep(for: .seconds(0.8))
         dismiss()

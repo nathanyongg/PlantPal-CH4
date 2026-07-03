@@ -107,6 +107,7 @@ struct DashboardView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Add Plant")
                 }
             }
             .navigationDestination(isPresented: $navigateToAddPlant) {
@@ -131,7 +132,8 @@ extension DashboardView {
 
             Image(systemName: "leaf.circle")
                 .font(.system(size: 80))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppTheme.Colors.success)
+                .accessibilityHidden(true)
 
             Text("No Plants Yet")
                 .font(.title2.bold())
@@ -142,6 +144,7 @@ extension DashboardView {
                 .padding(.horizontal)
 
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

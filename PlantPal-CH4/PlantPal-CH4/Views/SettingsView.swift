@@ -10,10 +10,13 @@ import SwiftUI
 struct SettingsView: View {
 
     @AppStorage("textSize")
-    private var textSize: TextSize = .medium
+    private var textSize: TextSize = .system
 
     @AppStorage("appearance")
     private var appearance: Appearance = .system
+
+    @AppStorage("spokenAnnouncements")
+    private var spokenAnnouncements = true
 
     @AppStorage("notificationsEnabled")
     private var notificationsEnabled = true
@@ -28,7 +31,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
 
-                Section("Appearance") {
+                Section {
 
                     Picker("Theme", selection: $appearance) {
                         ForEach(Appearance.allCases) { option in
@@ -43,6 +46,22 @@ struct SettingsView: View {
                                 .tag(size)
                         }
                     }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("\"System\" follows the theme and text size set in your device Settings, including larger accessibility sizes.")
+                }
+
+                Section {
+
+                    Toggle(
+                        "Spoken Announcements",
+                        isOn: $spokenAnnouncements
+                    )
+                } header: {
+                    Text("Accessibility")
+                } footer: {
+                    Text("Reads important updates aloud, such as when a plant is added. Works alongside VoiceOver.")
                 }
 
                 Section("Notifications") {
