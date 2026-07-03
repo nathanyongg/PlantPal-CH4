@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct PlantCardView: View {
 
@@ -20,19 +21,21 @@ struct PlantCardView: View {
                 .padding(.top, 10)
 
             Text(plant.nickname)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.43, green: 0.52, blue: 0.36))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(AppTheme.Colors.leafGreen)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .padding(.vertical, 16)
         }
-        .background(Color.white)
+        .background(AppTheme.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay {
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+                .stroke(AppTheme.Colors.border, lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(plant.nickname), \(plant.name), \(statusText)")
     }
 
 
@@ -84,15 +87,20 @@ extension PlantCardView {
             } else {
 
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.green.opacity(0.15))
+                    .fill(AppTheme.Colors.success.opacity(0.15))
                     .overlay {
                         Image(systemName: "leaf.fill")
                             .font(.system(size: 48))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppTheme.Colors.success)
                     }
                     .aspectRatio(3/4, contentMode: .fit)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
+}
+
+#Preview {
+    PlantSetupView()
+        .modelContainer(for: PlantProfile.self, inMemory: true)
 }

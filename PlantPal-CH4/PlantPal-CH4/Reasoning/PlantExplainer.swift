@@ -19,6 +19,9 @@ import FoundationModels
 final class PlantExplainer {
 
     private let session: LanguageModelSession
+    
+    private let plantSpecies: String = ""
+    
 
     // Pass in the plant's profile once at init — species and
     // healthy ranges live here so you don't repeat them every call.

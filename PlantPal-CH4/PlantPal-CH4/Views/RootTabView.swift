@@ -9,6 +9,42 @@ import SwiftUI
 // at a glance — "2 healthy · 1 warning · 1 critical".
 // ══════════════════════════════════════════════════════════════
 
+struct RootTabView: View {
+
+    init() {
+        // Make tab bar and navigation bar fully transparent
+        // so AppBackground shows through everywhere
+        let tabBarAppearance = UITabBarAppearance()
+        tabBarAppearance.configureWithTransparentBackground()
+        UITabBar.appearance().standardAppearance = tabBarAppearance
+        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+
+        let navBarAppearance = UINavigationBarAppearance()
+        navBarAppearance.configureWithTransparentBackground()
+        navBarAppearance.shadowColor = .clear
+        UINavigationBar.appearance().standardAppearance = navBarAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navBarAppearance
+    }
+
+    var body: some View {
+
+        AppBackground {
+            TabView {
+
+                Tab("Plants", systemImage: "leaf.fill") {
+                    DashboardView()
+                }
+
+                Tab("Settings", systemImage: "gearshape.fill") {
+                    SettingsView()
+                }
+            }
+            .tabViewSearchActivation(.searchTabSelection)
+            .padding(.bottom, 16)
+        }
+    }
+}
+
 struct DashboardView: View {
 
     @Query(sort: \PlantProfile.addedAt)
@@ -35,66 +71,55 @@ struct DashboardView: View {
 
     private let columns = [
         GridItem(.flexible(), spacing: 20),
-        GridItem(.flexible(), spacing: 20)
+        GridItem(.flexible(), spacing: 20),
     ]
-    
+
     var body: some View {
-
         NavigationStack {
-            AppBackground {
-                ZStack(alignment: .bottomTrailing) {
-                    VStack(spacing: 16) {
-                        if filteredPlants.isEmpty {
+            ZStack {
+                Color.clear
+                    .ignoresSafeArea()
 
-                            VStack {
-                                Spacer()
-                                emptyState
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        } else {
-
-                            ScrollView {
-                                LazyVGrid(columns: columns, spacing: 24) {
-                                    ForEach(filteredPlants) { plant in
-                                        PlantCardView(plant: plant)
-                                    }
-
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.top, 136)
-                                .safeAreaPadding(.bottom, 100)
+                if filteredPlants.isEmpty {
+                    VStack {
+                        Spacer()
+                        emptyState
+                        Spacer()
+                    }
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 24) {
+                            ForEach(filteredPlants) { plant in
+                                PlantCardView(plant: plant)
                             }
                         }
+                        .padding(.horizontal, 20)
+                        .safeAreaPadding(.bottom, 100)
                     }
-                }
-                .navigationTitle("Collections")
-                .navigationBarTitleDisplayMode(.large)
-
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            navigateToAddPlant = true
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                    }
-                }
-                .navigationDestination(isPresented: $navigateToAddPlant) {
-                    PlantSetupView()
-                }
-                
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search plants"
-                )
-                
-                .onAppear {
-                    print("DashboardView: plants count =", plants.count)
                 }
             }
+            .navigationTitle("Collections")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        navigateToAddPlant = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add Plant")
+                }
+            }
+            .navigationDestination(isPresented: $navigateToAddPlant) {
+                PlantSetupView()
+            }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search plants"
+            )
+            .scrollContentBackground(.hidden)
+            .toolbarBackground(.clear, for: .navigationBar)
         }
     }
 }
@@ -107,7 +132,8 @@ extension DashboardView {
 
             Image(systemName: "leaf.circle")
                 .font(.system(size: 80))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppTheme.Colors.success)
+                .accessibilityHidden(true)
 
             Text("No Plants Yet")
                 .font(.title2.bold())
@@ -118,6 +144,7 @@ extension DashboardView {
                 .padding(.horizontal)
 
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -187,6 +214,6 @@ extension DashboardView {
     container.mainContext.insert(pothos)
     container.mainContext.insert(cactus)
 
-    return DashboardView()
+    return RootTabView()
         .modelContainer(container)
 }

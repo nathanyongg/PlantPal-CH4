@@ -27,6 +27,7 @@ enum AppTheme {
         static let critical = Color("AppCritical")
 
         static let lavenderPanel = Color("AppLavender")
+        static let leafGreen = Color("AppLeafGreen")
     }
 
     enum Typography {
