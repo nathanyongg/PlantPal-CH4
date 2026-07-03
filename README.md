@@ -13,36 +13,36 @@ for the available data.
 
 We first trained a Random Forest model using the provided dataset.
 
-  Result                 Value
-  -------------------- -------
-  Accuracy                100%
-  Recall (Unhealthy)      1.00
+| Result | Value |
+| --- | --- |
+| Accuracy | 100% |
+| Recall (Unhealthy) | 1.00 |
 
 The result looked excellent, but feature importance showed that almost
 every prediction came from the `Health_Score` column instead of the real
 sensor values.
 
-  Feature             Importance
-  ----------------- ------------
-  Health_Score             87.5%
-  Light Intensity           2.3%
-  Nutrient Level            2.2%
-  Soil Moisture             2.1%
-  Soil pH                   2.0%
-  Temperature               2.0%
-  Humidity                  1.8%
+| Feature | Importance |
+| --- | --- |
+| Health_Score | 87.5% |
+| Light Intensity | 2.3% |
+| Nutrient Level | 2.2% |
+| Soil Moisture | 2.1% |
+| Soil pH | 2.0% |
+| Temperature | 2.0% |
+| Humidity | 1.8% |
 
 After removing this advantage, the remaining sensor readings were too
 similar between healthy and unhealthy plants.
 
 We also experimented with SMOTE to improve the imbalanced dataset.
 
-  Method            Recall   False Alarms
-  --------------- -------- --------------
-  Baseline            0.03              3
-  SMOTE               0.46             62
-  SMOTE + Tomek       0.43             63
-  SMOTE + ENN         0.46             82
+| Method | Recall | False Alarms |
+| --- | --- | --- |
+| Baseline | 0.03 | 3 |
+| SMOTE | 0.46 | 62 |
+| SMOTE + Tomek | 0.43 | 63 |
+| SMOTE + ENN | 0.46 | 82 |
 
 Although recall improved, the number of false alarms became too high.
 Because of this, we decided not to use the CoreML model.
@@ -73,35 +73,16 @@ creates a short explanation that is shown in the notification.
 
 ## Frameworks Used
 
-  -----------------------------------------------------------------------
-  Framework               Core Feature            Purpose in PlantPal
-  ----------------------- ----------------------- -----------------------
-  SwiftUI                 Declarative UI          Build the application's
-                                                  interface
-
-  SwiftData               Local persistence       Store plant profiles,
-                                                  thresholds and latest
-                                                  status
-
-  FoundationModels        On-device language      Generate
-                          model                   natural-language
-                                                  explanations for alerts
-
-  PhotosUI                Photo Picker            Allow users to choose
-                                                  plant images
-
-  CoreBluetooth           BLE communication       Initial ESP32 WiFi
-                                                  provisioning
-
-  BackgroundTasks         Background execution    Periodically check
-                                                  plant status
-
-  UserNotifications       Local notifications     Notify users when a
-                                                  plant needs attention
-
-  URLSession              HTTP networking         Retrieve sensor data
-                                                  and call Gemini API
-  -----------------------------------------------------------------------
+| Framework | Core Feature | Purpose in PlantPal |
+| --- | --- | --- |
+| SwiftUI | Declarative UI | Build the application's interface |
+| SwiftData | Local persistence | Store plant profiles, thresholds and latest status |
+| FoundationModels | On-device language model | Generate natural-language explanations for alerts |
+| PhotosUI | Photo Picker | Allow users to choose plant images |
+| CoreBluetooth | BLE communication | Initial ESP32 WiFi provisioning |
+| BackgroundTasks | Background execution | Periodically check plant status |
+| UserNotifications | Local notifications | Notify users when a plant needs attention |
+| URLSession | HTTP networking | Retrieve sensor data and call Gemini API |
 
 ## Limitations
 
