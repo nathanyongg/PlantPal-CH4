@@ -46,28 +46,39 @@ struct PlantSetupView: View {
             AppBackground {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
-                        Button {
-                            showingPhotoOptions = true
-                        } label: {
-                            photoSection
-                        }
-                        .confirmationDialog(
-                            "Choose Photo",
-                            isPresented: $showingPhotoOptions
-                        ) {
-                            Button("Take Photo") {
-                                showingCamera = true
+                        photoSection
+                            .confirmationDialog(
+                                "Choose Photo",
+                                isPresented: $showingPhotoOptions
+                            ) {
+                                Button("Take Photo") {
+                                    showingCamera = true
+                                }
+
+                                Button("Choose from Library") {
+                                    showingPhotoPicker = true
+                                }
+
+                                Button("Cancel", role: .cancel) {}
                             }
 
-                            Button("Choose from Library") {
-                                showingPhotoPicker = true
-                            }
+                            .confirmationDialog(
+                                "Choose Photo",
+                                isPresented: $showingPhotoOptions
+                            ) {
+                                Button("Take Photo") {
+                                    showingCamera = true
+                                }
 
-                            Button("Cancel", role: .cancel) {}
-                        }
+                                Button("Choose from Library") {
+                                    showingPhotoPicker = true
+                                }
+
+                                Button("Cancel", role: .cancel) {}
+                            }
 
                         inputCard
-                        
+
                         saveButton
                     }
                     .padding(.horizontal, 24)
@@ -77,79 +88,69 @@ struct PlantSetupView: View {
             }
             .navigationTitle("Add Plant")
             .navigationBarTitleDisplayMode(.inline)
-
-            .fullScreenCover(isPresented: $showingCamera) {
-                CameraView(image: $plantImage)
-            }
-
             .photosPicker(
                 isPresented: $showingPhotoPicker,
                 selection: $selectedPhoto,
                 matching: .images
             )
-
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView(image: $plantImage)
+                    .ignoresSafeArea()
+            }
             .onChange(of: selectedPhoto) { _, newItem in
+                guard let newItem else { return }
                 Task {
                     guard
-                        let data = try? await newItem?.loadTransferable(type: Data.self),
+                        let data = try? await newItem.loadTransferable(
+                            type: Data.self
+                        ),
                         let image = UIImage(data: data)
                     else { return }
-
                     plantImage = image
+                    selectedPhoto = nil
                 }
             }
         }
     }
 
     private var photoSection: some View {
-        ZStack(alignment: .bottomTrailing) {
-
-            Group {
-                if let image = plantImage {
+        ZStack {
+            if let image = plantImage {
+                GeometryReader { geo in
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 170)
+                        .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                } else {
-                    RoundedRectangle(cornerRadius: 25)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            VStack(spacing: 12){
-                                Image(systemName: "camera")
-                                    .font(.largeTitle)
-                                    .foregroundStyle(.secondary)
-                                Text("Add a photo")
-                            }
-                        }
                 }
+                .frame(height: 450)
+            } else {
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        VStack(spacing: 12) {
+                            Image(systemName: "camera")
+                                .font(.largeTitle)
+                            Text("Add a photo")
+                        }
+                    }
             }
-            .frame(height: 420)
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 28))
-
-            Button("Retake") {
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 450)
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture {
+            showingPhotoOptions = true
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button(plantImage == nil ? "Add Photo" : "Retake") {
                 showingPhotoOptions = true
             }
-            .padding(.horizontal, 26)
+            .padding(.horizontal, 18)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .padding(18)
-        }
-        .fullScreenCover(isPresented: $showingCamera) {
-            CameraView(image: $plantImage)
-        }
-        .onChange(of: selectedPhoto) { _, newItem in
-            Task {
-                guard
-                    let data = try? await newItem?.loadTransferable(type: Data.self),
-                    let image = UIImage(data: data)
-                else { return }
-
-                plantImage = image
-            }
         }
     }
 
@@ -163,7 +164,7 @@ struct PlantSetupView: View {
                 Spacer()
 
                 TextField(
-                    "My Mochi 🌱",
+                    "My Mochi",
                     text: $nickname
                 )
                 .multilineTextAlignment(.trailing)
@@ -272,10 +273,6 @@ struct PlantSetupView: View {
             thresholds: thresholds
         )
         profile.imageData = plantImage?.jpegData(compressionQuality: 0.85)
-
-        print("Inserting profile...")
-        
-        modelContext.insert(profile)
 
         print("Inserting profile...")
         modelContext.insert(profile)
