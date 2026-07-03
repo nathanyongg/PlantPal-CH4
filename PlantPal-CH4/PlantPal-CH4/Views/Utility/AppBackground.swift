@@ -5,7 +5,6 @@
 //  Created by Agustinus Juan Kurniawan on 02/07/26.
 //
 
-
 import SwiftUI
 
 struct AppBackground<Content: View>: View {
@@ -22,7 +21,7 @@ struct AppBackground<Content: View>: View {
 
     var body: some View {
         ZStack {
-            Color("Color")
+            AppTheme.Colors.background
                 .ignoresSafeArea()
 
             Image("Background")
@@ -30,12 +29,13 @@ struct AppBackground<Content: View>: View {
                 .scaledToFill()
                 .ignoresSafeArea()
                 .opacity(backgroundOpacity)
+                .blur(radius: 4)
 
             content
         }
     }
 
     private var backgroundOpacity: Double {
-        colorScheme == .dark ? 0.06 : 0.9
+        colorScheme == .dark ? 0.12 : 0.28
     }
 }

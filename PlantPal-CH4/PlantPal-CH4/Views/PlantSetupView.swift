@@ -43,74 +43,74 @@ struct PlantSetupView: View {
 
     var body: some View {
         ZStack {
-            AppBackground {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 14) {
-                        photoSection
-                            .confirmationDialog(
-                                "Choose Photo",
-                                isPresented: $showingPhotoOptions
-                            ) {
-                                Button("Take Photo") {
-                                    showingCamera = true
-                                }
-
-                                Button("Choose from Library") {
-                                    showingPhotoPicker = true
-                                }
-
-                                Button("Cancel", role: .cancel) {}
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 14) {
+                    photoSection
+                        .confirmationDialog(
+                            "Choose Photo",
+                            isPresented: $showingPhotoOptions
+                        ) {
+                            Button("Take Photo") {
+                                showingCamera = true
                             }
 
-                            .confirmationDialog(
-                                "Choose Photo",
-                                isPresented: $showingPhotoOptions
-                            ) {
-                                Button("Take Photo") {
-                                    showingCamera = true
-                                }
-
-                                Button("Choose from Library") {
-                                    showingPhotoPicker = true
-                                }
-
-                                Button("Cancel", role: .cancel) {}
+                            Button("Choose from Library") {
+                                showingPhotoPicker = true
                             }
 
-                        inputCard
+                            Button("Cancel", role: .cancel) {}
+                        }
 
-                        saveButton
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 104)
-                    .padding(.bottom, 40)
+                        .confirmationDialog(
+                            "Choose Photo",
+                            isPresented: $showingPhotoOptions
+                        ) {
+                            Button("Take Photo") {
+                                showingCamera = true
+                            }
+
+                            Button("Choose from Library") {
+                                showingPhotoPicker = true
+                            }
+
+                            Button("Cancel", role: .cancel) {}
+                        }
+
+                    inputCard
+
+                    saveButton
                 }
-            }
-            .navigationTitle("Add Plant")
-            .navigationBarTitleDisplayMode(.inline)
-            .photosPicker(
-                isPresented: $showingPhotoPicker,
-                selection: $selectedPhoto,
-                matching: .images
-            )
-            .fullScreenCover(isPresented: $showingCamera) {
-                CameraView(image: $plantImage)
-                    .ignoresSafeArea()
-            }
-            .onChange(of: selectedPhoto) { _, newItem in
-                guard let newItem else { return }
-                Task {
-                    guard
-                        let data = try? await newItem.loadTransferable(
-                            type: Data.self
-                        ),
-                        let image = UIImage(data: data)
-                    else { return }
-                    plantImage = image
-                    selectedPhoto = nil
-                }
+                .padding(.horizontal, 24)
+//                .padding(.top, 104)
+                .padding(.bottom, 40)
             }
         }
+        .toolbar(.hidden, for: .tabBar)
+        .navigationTitle("Add Plant")
+        .navigationBarTitleDisplayMode(.inline)
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $selectedPhoto,
+            matching: .images
+        )
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(image: $plantImage)
+                .ignoresSafeArea()
+        }
+        .onChange(of: selectedPhoto) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                guard
+                    let data = try? await newItem.loadTransferable(
+                        type: Data.self
+                    ),
+                    let image = UIImage(data: data)
+                else { return }
+                plantImage = image
+                selectedPhoto = nil
+            }
+        }
+
     }
 
     private var photoSection: some View {
