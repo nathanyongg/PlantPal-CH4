@@ -20,22 +20,28 @@ struct AppBackground<Content: View>: View {
     }
 
     var body: some View {
+        // Attached as a `.background`, not a ZStack sibling, so it
+        // never affects `content`'s own layout — a List/Form nested
+        // inside a ZStack alongside `.ignoresSafeArea()` layers miscomputes
+        // its top content inset, which threw the large-title layout off.
+        content
+            .background(backgroundLayer)
+    }
+
+    private var backgroundLayer: some View {
         ZStack {
             AppTheme.Colors.background
-                .ignoresSafeArea()
 
             Image("Background")
                 .resizable()
                 .scaledToFill()
-                .ignoresSafeArea()
                 .opacity(backgroundOpacity)
                 .blur(radius: 4)
-
-            content
         }
+        .ignoresSafeArea()
     }
 
     private var backgroundOpacity: Double {
-        colorScheme == .dark ? 0.12 : 0.28
+        colorScheme == .dark ? 0.12 : 1
     }
 }
