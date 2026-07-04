@@ -255,6 +255,8 @@ struct PlantHealthTestView: View {
                 labeledText("Notification Title", explanation.notificationTitle)
                 labeledText("Cause", explanation.cause)
                 labeledText("Action", explanation.action)
+                labeledText("Caretaker Insight", explanation.caretakerInsight)
+                labeledText("Plant Message", explanation.plantMessage)
                 labeledText("Urgency", explanation.urgency)
             }
 
@@ -378,7 +380,7 @@ struct PlantHealthTestView: View {
         }
 
         do {
-            explanation = try await explainer.explain(reading: reading, detection: result)
+            explanation = try await explainer.explain(reading: reading, detection: result, species: testProfile.name)
         } catch {
             errorMessage = error.localizedDescription
         }

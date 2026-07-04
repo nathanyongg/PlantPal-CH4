@@ -55,19 +55,19 @@ final class PlantHealthMonitor {
         // Healthy — nothing to do, SwiftData already updated above
         guard !detection.isHealthy else { return }
 
-        await handleUnhealthy(reading: reading, detection: detection)
+        await handleUnhealthy(reading: reading, detection: detection, species: profile.name)
     }
 
     // MARK: — Unhealthy path
 
-    private func handleUnhealthy(reading: SensorReading, detection: DetectionResult) async {
+    private func handleUnhealthy(reading: SensorReading, detection: DetectionResult, species: String) async {
         guard PlantExplainer.isAvailable() else {
             await notifyFallback(detection: detection)
             return
         }
 
         do {
-            let explanation = try await explainer.explain(reading: reading, detection: detection)
+            let explanation = try await explainer.explain(reading: reading, detection: detection, species: species)
             await notify(detection: detection, explanation: explanation)
         } catch {
             await notifyFallback(detection: detection)

@@ -508,20 +508,10 @@ final class PlantPipelineViewModel: ObservableObject {
 
         lastDetectionLevel = detection.overallLevel
 
-        guard !detection.isHealthy else {
-            cardData = PlantCardData(
-                species: species, nickname: nickname, imageData: imageData,
-                mood: "Happy", moodEmoji: "😊",
-                todaysMessage: "Everything feels just right todayyy!",
-                aiInsight: "All readings are within the ideal range — keep up the current care routine.",
-                metrics: metrics
-            )
-            isLoading = false
-            return
-        }
-
         guard PlantExplainer.isAvailable() else {
-            errorMessage = PlantExplainer.unavailableReason() ?? "Apple Intelligence unavailable."
+            // A missing FM only means a less personal message — not
+            // worth alarming the user over when the plant is fine.
+            errorMessage = detection.isHealthy ? nil : (PlantExplainer.unavailableReason() ?? "Apple Intelligence unavailable.")
             cardData = fallbackCard(
                 for: detection.overallLevel, species: species, nickname: nickname,
                 imageData: imageData, metrics: metrics
@@ -531,17 +521,19 @@ final class PlantPipelineViewModel: ObservableObject {
         }
 
         do {
-            let explanation = try await explainer.explain(reading: reading, detection: detection)
+            let explanation = try await explainer.explain(reading: reading, detection: detection, species: species)
             let (mood, emoji) = Self.mood(for: detection.overallLevel)
             cardData = PlantCardData(
                 species: species, nickname: nickname, imageData: imageData,
                 mood: mood, moodEmoji: emoji,
-                todaysMessage: explanation.notificationBody,
-                aiInsight: "\(explanation.cause) \(explanation.action)",
+                todaysMessage: explanation.plantMessage,
+                aiInsight: detection.isHealthy
+                    ? "All readings are within the ideal range — keep up the current care routine."
+                    : explanation.caretakerInsight,
                 metrics: metrics
             )
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = detection.isHealthy ? nil : error.localizedDescription
             cardData = fallbackCard(
                 for: detection.overallLevel, species: species, nickname: nickname,
                 imageData: imageData, metrics: metrics
@@ -556,11 +548,17 @@ final class PlantPipelineViewModel: ObservableObject {
         imageData: Data?, metrics: [PlantMetric]
     ) -> PlantCardData {
         let (mood, emoji) = Self.mood(for: level)
+        let message = level == .healthy
+            ? "I'm feeling good today!"
+            : "Something doesn't feel quite right today."
+        let insight = level == .healthy
+            ? "All readings are within the ideal range — keep up the current care routine."
+            : "Couldn't generate a detailed explanation right now, but at least one reading is outside the ideal range."
         return PlantCardData(
             species: species, nickname: nickname, imageData: imageData,
             mood: mood, moodEmoji: emoji,
-            todaysMessage: "Something's off — check my latest readings.",
-            aiInsight: "Couldn't generate a detailed explanation right now, but at least one reading is outside the ideal range.",
+            todaysMessage: message,
+            aiInsight: insight,
             metrics: metrics
         )
     }
