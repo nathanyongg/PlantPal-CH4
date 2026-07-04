@@ -1,55 +1,60 @@
+import SwiftData
 import SwiftUI
 internal import Combine
 
 // ══════════════════════════════════════════════════════════════
-// MARK: — PlantLandingView
+// MARK: — PlantDetailView
 //
-// The main "plant profile" landing screen. Unlike
-// PlantHealthTestView (a debug harness with sliders — keep that
-// as its own separate file), this view runs the REAL pipeline
-// against a real SensorReading + PlantProfile and renders the
-// result. No sliders, no nested NavigationStack — just data in,
-// UI out.
-//
-// PlantHealthDetector → PlantExplainer → PlantCardData (display model)
+// The "plant profile" screen — species, nickname, mood, today's
+// message, sensor metrics, and an AI-generated insight. Fetches
+// the latest sensor reading, then runs it through the real
+// pipeline: PlantHealthDetector → PlantExplainer → PlantCardData.
 // ══════════════════════════════════════════════════════════════
 
-struct PlantLandingView: View {
+struct PlantDetailView: View {
 
-    // Inputs — supply the latest reading + the plant's stored profile
-    // (e.g. from your SwiftData store / ESP32 / cloud backend).
-    let reading: SensorReading
     let profile: PlantProfile
-    let species: String
-    let nickname: String
-    let imageAssetName: String
 
-    var onBack: (() -> Void)? = nil
     var onOpenChat: (() -> Void)? = nil
     var onAskMore: (() -> Void)? = nil
 
+    @Environment(\.dismiss) private var dismiss
+
     @StateObject private var viewModel = PlantPipelineViewModel()
 
-    var body: some View {
-        ZStack(alignment: .top) {
-            backgroundGradient
+    @State private var reading: SensorReading?
+    @State private var isFetchingReading = true
+    @State private var fetchErrorMessage: String?
 
-            if let plant = viewModel.cardData {
-                landingContent(plant)
-            } else {
-                loadingView
+    var body: some View {
+        AppBackground {
+            Group {
+                if isFetchingReading {
+                    loadingView
+                } else if let reading {
+                    landingContent(reading: reading)
+                } else {
+                    fetchErrorView
+                }
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
-            await viewModel.refresh(
-                reading: reading,
-                profile: profile,
-                species: species,
-                nickname: nickname,
-                imageAssetName: imageAssetName
-            )
+            await fetchReading()
         }
+    }
+
+    private func fetchReading() async {
+        isFetchingReading = true
+        fetchErrorMessage = nil
+        do {
+            reading = try await PlantDataService().fetchLatestReading()
+        } catch {
+            fetchErrorMessage = error.localizedDescription
+        }
+        isFetchingReading = false
     }
 
     // MARK: — Loading state
@@ -58,24 +63,62 @@ struct PlantLandingView: View {
         VStack(spacing: 12) {
             ProgressView()
             Text("Reading your plant…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(AppTheme.Typography.subtitle)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: — Fetch error state
+
+    private var fetchErrorView: some View {
+        VStack(spacing: 16) {
+            topBar
+
+            Spacer()
+
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 44))
+                .foregroundStyle(AppTheme.Colors.warning)
+
+            Text(fetchErrorMessage ?? "Couldn't reach your plant sensor.")
+                .font(AppTheme.Typography.subtitle)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Button("Try Again") {
+                Task { await fetchReading() }
+            }
+            .font(AppTheme.Typography.cardTitle)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.secondaryAccent, in: Capsule())
+
+            Spacer()
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     // MARK: — Loaded content
 
-    private func landingContent(_ plant: PlantCardData) -> some View {
+    private func landingContent(reading: SensorReading) -> some View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     topBar
-                    header(plant)
-                    photoAndMoodRow(plant)
-                    metricsRow(plant)
+                    header
+                    photoAndMoodRow
 
-                    if let errorMessage = viewModel.errorMessage {
-                        errorBanner(errorMessage)
+                    if let plant = viewModel.cardData {
+                        metricsRow(plant)
+
+                        if let errorMessage = viewModel.errorMessage {
+                            errorBanner(errorMessage)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -86,110 +129,113 @@ struct PlantLandingView: View {
             Color.clear.frame(height: 0)
         }
         .overlay(alignment: .bottom) {
-            insightPanel(plant)
+            if let plant = viewModel.cardData {
+                insightPanel(plant)
+            }
         }
-    }
-
-    // MARK: — Background
-
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [Color(hex: "FCF6DA"), Color(hex: "FBEECB")],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        .task(id: reading.timestamp) {
+            await viewModel.refresh(
+                reading: reading,
+                profile: profile,
+                species: profile.name,
+                nickname: profile.nickname,
+                imageData: profile.imageData
+            )
+        }
     }
 
     // MARK: — Top bar
 
     private var topBar: some View {
         HStack {
-            Button(action: { onBack?() }) {
+            Button {
+                dismiss()
+            } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.75))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
                     .frame(width: 40, height: 40)
-                    .background(.white, in: Circle())
+                    .background(AppTheme.Colors.surface, in: Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
 
             Spacer()
 
-            Button(action: { onOpenChat?() }) {
+            Button {
+                onOpenChat?()
+            } label: {
                 Image(systemName: "message.fill")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background(Color(hex: "F0A868"), in: Circle())
+                    .background(AppTheme.Colors.primaryAccent, in: Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Chat about this plant")
         }
         .padding(.top, 8)
     }
 
     // MARK: — Header (species + name)
 
-    private func header(_ plant: PlantCardData) -> some View {
+    private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(plant.species)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color(hex: "7C9473"))
+            Text(profile.name)
+                .font(AppTheme.Typography.subtitle.weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.leafGreen)
 
             HStack(spacing: 6) {
-                Text(plant.nickname)
+                Text(profile.nickname)
                     .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.black.opacity(0.85))
-                Text(plant.emoji)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("🌱")
                     .font(.system(size: 26))
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: — Photo + mood/message
 
-    private func photoAndMoodRow(_ plant: PlantCardData) -> some View {
+    private var photoAndMoodRow: some View {
         HStack(alignment: .top, spacing: 12) {
-            plantPhoto(plant)
+            plantPhoto
                 .frame(width: 165, height: 220)
 
             VStack(alignment: .trailing, spacing: 10) {
-                moodPill(plant)
-                messageBubble(plant)
+                if let plant = viewModel.cardData {
+                    moodPill(plant)
+                    messageBubble(plant)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
-    private func plantPhoto(_ plant: PlantCardData) -> some View {
+    private var plantPhoto: some View {
         Group {
-            #if canImport(UIKit)
-            if let uiImage = UIImage(named: plant.imageAssetName) {
+            if let imageData = profile.imageData,
+               let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
             } else {
                 photoPlaceholder
             }
-            #else
-            photoPlaceholder
-            #endif
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .padding(8)
-        .background(.white, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
     }
 
     private var photoPlaceholder: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "DCEBD8"), Color(hex: "C7DFC1")],
-                startPoint: .top, endPoint: .bottom
-            )
+            AppTheme.Colors.success.opacity(0.15)
             Image(systemName: "leaf.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(AppTheme.Colors.success)
         }
     }
 
@@ -198,27 +244,27 @@ struct PlantLandingView: View {
             Text(plant.moodEmoji)
                 .font(.system(size: 14))
             Text(plant.mood)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color(hex: "9B5FBE"))
+                .font(AppTheme.Typography.subtitle.weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.secondaryAccent)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(hex: "F1D9F5"), in: Capsule())
+        .background(AppTheme.Colors.lavenderPanel, in: Capsule())
     }
 
     private func messageBubble(_ plant: PlantCardData) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Today's message")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(AppTheme.Typography.tiny)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
             Text("\u{201C}\(plant.todaysMessage)\u{201D}")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.black.opacity(0.8))
+                .font(AppTheme.Typography.subtitle.weight(.medium))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 
@@ -241,13 +287,13 @@ struct PlantLandingView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppTheme.Colors.warning)
             Text(message)
-                .font(.caption)
-                .foregroundStyle(.black.opacity(0.7))
+                .font(AppTheme.Typography.caption)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
         }
         .padding(12)
-        .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.warning.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: — Bottom AI insight panel
@@ -277,7 +323,9 @@ struct PlantLandingView: View {
 
                 HStack {
                     Spacer()
-                    Button(action: { onAskMore?() }) {
+                    Button {
+                        onAskMore?()
+                    } label: {
                         Text("Ask more")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white)
@@ -294,7 +342,7 @@ struct PlantLandingView: View {
             .padding(.bottom, 24)
         }
         .background(
-            Color(hex: "D7BFF0")
+            AppTheme.Colors.insightPanel
                 .clipShape(RoundedCorner(radius: 34, corners: [.topLeft, .topRight]))
         )
     }
@@ -322,7 +370,7 @@ private struct MetricCard: View {
             HStack(spacing: 4) {
                 Text(metric.statusLabel)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.black.opacity(0.75))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(metric.statusEmoji)
@@ -335,7 +383,7 @@ private struct MetricCard: View {
 
             Text(metric.idealRangeText)
                 .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
@@ -346,8 +394,10 @@ private struct MetricCard: View {
         .padding(.horizontal, 10)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity)
-        .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(metric.statusLabel), \(metric.valueText), \(metric.idealRangeText)")
     }
 }
 
@@ -358,7 +408,7 @@ private struct ProgressTrack: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color(hex: "ECECEC"))
+                Capsule().fill(AppTheme.Colors.border)
                 Capsule()
                     .fill(tint)
                     .frame(width: max(6, geo.size.width * progress))
@@ -384,26 +434,12 @@ private struct RoundedCorner: Shape {
     }
 }
 
-// MARK: — Color(hex:) convenience
-
-private extension Color {
-    init(hex: String) {
-        let scanner = Scanner(string: hex.trimmingCharacters(in: .whitespacesAndNewlines))
-        var rgb: UInt64 = 0
-        scanner.scanHexInt64(&rgb)
-        let r = Double((rgb & 0xFF0000) >> 16) / 255
-        let g = Double((rgb & 0x00FF00) >> 8) / 255
-        let b = Double(rgb & 0x0000FF) / 255
-        self.init(red: r, green: g, blue: b)
-    }
-}
-
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantPipelineViewModel
 //
 // Runs the real PlantHealthDetector → PlantExplainer pipeline
 // (the same calls used in PlantHealthTestView) and turns the
-// result into a PlantCardData for PlantLandingView to render.
+// result into a PlantCardData for PlantDetailView to render.
 // ══════════════════════════════════════════════════════════════
 
 @MainActor
@@ -421,7 +457,7 @@ final class PlantPipelineViewModel: ObservableObject {
         profile: PlantProfile,
         species: String,
         nickname: String,
-        imageAssetName: String
+        imageData: Data?
     ) async {
         isLoading = true
         errorMessage = nil
@@ -432,7 +468,7 @@ final class PlantPipelineViewModel: ObservableObject {
 
         guard !detection.isHealthy else {
             cardData = PlantCardData(
-                species: species, nickname: nickname, imageAssetName: imageAssetName,
+                species: species, nickname: nickname, imageData: imageData,
                 mood: "Happy", moodEmoji: "😊",
                 todaysMessage: "Everything feels just right todayyy!",
                 aiInsight: "All readings are within the ideal range — keep up the current care routine.",
@@ -446,7 +482,7 @@ final class PlantPipelineViewModel: ObservableObject {
             errorMessage = PlantExplainer.unavailableReason() ?? "Apple Intelligence unavailable."
             cardData = fallbackCard(
                 for: detection.overallLevel, species: species, nickname: nickname,
-                imageAssetName: imageAssetName, metrics: metrics
+                imageData: imageData, metrics: metrics
             )
             isLoading = false
             return
@@ -456,7 +492,7 @@ final class PlantPipelineViewModel: ObservableObject {
             let explanation = try await explainer.explain(reading: reading, detection: detection)
             let (mood, emoji) = Self.mood(for: detection.overallLevel)
             cardData = PlantCardData(
-                species: species, nickname: nickname, imageAssetName: imageAssetName,
+                species: species, nickname: nickname, imageData: imageData,
                 mood: mood, moodEmoji: emoji,
                 todaysMessage: explanation.notificationBody,
                 aiInsight: "\(explanation.cause) \(explanation.action)",
@@ -466,7 +502,7 @@ final class PlantPipelineViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             cardData = fallbackCard(
                 for: detection.overallLevel, species: species, nickname: nickname,
-                imageAssetName: imageAssetName, metrics: metrics
+                imageData: imageData, metrics: metrics
             )
         }
 
@@ -475,11 +511,11 @@ final class PlantPipelineViewModel: ObservableObject {
 
     private func fallbackCard(
         for level: AlertLevel, species: String, nickname: String,
-        imageAssetName: String, metrics: [PlantMetric]
+        imageData: Data?, metrics: [PlantMetric]
     ) -> PlantCardData {
         let (mood, emoji) = Self.mood(for: level)
         return PlantCardData(
-            species: species, nickname: nickname, imageAssetName: imageAssetName,
+            species: species, nickname: nickname, imageData: imageData,
             mood: mood, moodEmoji: emoji,
             todaysMessage: "Something's off — check my latest readings.",
             aiInsight: "Couldn't generate a detailed explanation right now, but at least one reading is outside the ideal range.",
@@ -553,10 +589,10 @@ private enum SensorKind: CaseIterable {
 
     private var tint: Color {
         switch self {
-        case .temperature: return Color(hex: "F16759") // red
-        case .humidity:     return Color(hex: "4FA8E0") // blue
-        case .soilMoisture: return Color(hex: "3EC0A6") // teal
-        case .light:        return Color(hex: "F5A93F") // orange
+        case .temperature: return AppTheme.Colors.sensorTemperature
+        case .humidity:     return AppTheme.Colors.sensorHumidity
+        case .soilMoisture: return AppTheme.Colors.sensorSoil
+        case .light:        return AppTheme.Colors.sensorLight
         }
     }
 
@@ -605,7 +641,7 @@ struct PlantCardData {
     var species: String
     var nickname: String
     var emoji: String = "🌱"
-    var imageAssetName: String
+    var imageData: Data?
     var mood: String
     var moodEmoji: String
     var todaysMessage: String
@@ -627,26 +663,23 @@ struct PlantMetric: Identifiable {
 // MARK: — Preview
 
 #Preview {
-    PlantLandingView(
-        reading: SensorReading(
-            timestamp: Date(),
-            temperature: 24,
-            humidity: 60,
-            soilMoisture: 50,
-            lightIntensity: 18_000
-        ),
-        profile: PlantProfile(
-            name: "Monstera deliciosa",
-            nickname: "My Mochi",
-            thresholds: PlantThresholds(
-                minTemperatureC: 18, maxTemperatureC: 26,
-                minHumidityPercent: 40, maxHumidityPercent: 80,
-                minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
-                minLightLux: 10_000, maxLightLux: 25_000
-            )
-        ),
-        species: "Monstera deliciosa",
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: PlantProfile.self, configurations: config)
+
+    let monstera = PlantProfile(
+        name: "Monstera deliciosa",
         nickname: "My Mochi",
-        imageAssetName: "mochiPhoto"
+        thresholds: PlantThresholds(
+            minTemperatureC: 18, maxTemperatureC: 26,
+            minHumidityPercent: 40, maxHumidityPercent: 80,
+            minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
+            minLightLux: 10_000, maxLightLux: 25_000
+        )
     )
+    container.mainContext.insert(monstera)
+
+    return NavigationStack {
+        PlantDetailView(profile: monstera)
+    }
+    .modelContainer(container)
 }

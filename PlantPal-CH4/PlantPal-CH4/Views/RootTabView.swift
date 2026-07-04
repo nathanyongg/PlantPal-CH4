@@ -28,20 +28,17 @@ struct RootTabView: View {
 
     var body: some View {
 
-        AppBackground {
-            TabView {
+        TabView {
 
-                Tab("Plants", systemImage: "leaf.fill") {
-                    DashboardView()
-                }
-
-                Tab("Settings", systemImage: "gearshape.fill") {
-                    SettingsView()
-                }
+            Tab("Plants", systemImage: "leaf.fill") {
+                DashboardView()
             }
-            .tabViewSearchActivation(.searchTabSelection)
-            .padding(.bottom, 16)
+
+            Tab("Settings", systemImage: "gearshape.fill") {
+                SettingsView()
+            }
         }
+        .tabViewSearchActivation(.searchTabSelection)
     }
 }
 
@@ -52,6 +49,7 @@ struct DashboardView: View {
 
     @State private var searchText = ""
     @State private var navigateToAddPlant = false
+    @State private var selectedPlant: PlantProfile?
 
     private var filteredPlants: [PlantProfile] {
 
@@ -76,25 +74,27 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.clear
-                    .ignoresSafeArea()
-
-                if filteredPlants.isEmpty {
-                    VStack {
-                        Spacer()
-                        emptyState
-                        Spacer()
-                    }
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 24) {
-                            ForEach(filteredPlants) { plant in
-                                PlantCardView(plant: plant)
-                            }
+            AppBackground {
+                Group {
+                    if filteredPlants.isEmpty {
+                        VStack {
+                            Spacer()
+                            emptyState
+                            Spacer()
                         }
-                        .padding(.horizontal, 20)
-                        .safeAreaPadding(.bottom, 100)
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 24) {
+                                ForEach(filteredPlants) { plant in
+                                    PlantCardView(plant: plant)
+                                        .onTapGesture {
+                                            selectedPlant = plant
+                                        }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .safeAreaPadding(.bottom, 100)
+                        }
                     }
                 }
             }
@@ -112,6 +112,9 @@ struct DashboardView: View {
             }
             .navigationDestination(isPresented: $navigateToAddPlant) {
                 PlantSetupView()
+            }
+            .navigationDestination(item: $selectedPlant) { plant in
+                PlantDetailView(profile: plant)
             }
             .searchable(
                 text: $searchText,
@@ -136,10 +139,12 @@ extension DashboardView {
                 .accessibilityHidden(true)
 
             Text("No Plants Yet")
-                .font(.title2.bold())
+                .font(AppTheme.Typography.sectionTitle)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
 
             Text("Add your first plant to begin monitoring its health.")
-                .foregroundStyle(.secondary)
+                .font(AppTheme.Typography.body)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 

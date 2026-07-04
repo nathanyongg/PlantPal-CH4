@@ -42,9 +42,11 @@ struct PlantSetupView: View {
     }
 
     var body: some View {
-        ZStack {
+        AppBackground {
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 14) {
+                LazyVStack(spacing: 20) {
+                    topBar
+
                     photoSection
                         .confirmationDialog(
                             "Choose Photo",
@@ -61,20 +63,16 @@ struct PlantSetupView: View {
                             Button("Cancel", role: .cancel) {}
                         }
 
-                    inputCard
-
-                    saveButton
+                    formPanel
 
                     statusSection
                 }
                 .padding(.horizontal, 24)
-//                .padding(.top, 104)
                 .padding(.bottom, 40)
             }
         }
         .toolbar(.hidden, for: .tabBar)
-        .navigationTitle("Add Plant")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .photosPicker(
             isPresented: $showingPhotoPicker,
             selection: $selectedPhoto,
@@ -100,6 +98,35 @@ struct PlantSetupView: View {
 
     }
 
+    // MARK: — Top bar
+
+    private var topBar: some View {
+        ZStack {
+            Text("Add Plant")
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel("Back")
+
+                Spacer()
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: — Photo section
+
     private var photoSection: some View {
         ZStack {
             if let image = plantImage {
@@ -120,6 +147,7 @@ struct PlantSetupView: View {
                                 .font(.largeTitle)
                             Text("Add a photo")
                         }
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
             }
         }
@@ -139,12 +167,25 @@ struct PlantSetupView: View {
             Button(plantImage == nil ? "Add Photo" : "Retake") {
                 showingPhotoOptions = true
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
             .padding(18)
         }
+    }
+
+    // MARK: — Form panel (nickname + species + save)
+
+    private var formPanel: some View {
+        VStack(spacing: 20) {
+            inputCard
+            saveButton
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(AppTheme.Colors.lavenderPanel)
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
+        )
     }
 
     private var inputCard: some View {
@@ -153,15 +194,25 @@ struct PlantSetupView: View {
 
             HStack {
                 Text("Nickname")
+                    .font(AppTheme.Typography.cardTitle)
+                    .foregroundStyle(AppTheme.Colors.leafGreen)
 
                 Spacer()
 
-                TextField(
-                    "My Mochi",
-                    text: $nickname
-                )
-                .multilineTextAlignment(.trailing)
-                .accessibilityLabel("Nickname")
+                HStack(spacing: 4) {
+                    TextField(
+                        "My Mochi",
+                        text: $nickname
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .accessibilityLabel("Nickname")
+
+                    Image(systemName: "leaf.fill")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.Colors.success)
+                        .accessibilityHidden(true)
+                }
             }
 
             Divider()
@@ -170,6 +221,8 @@ struct PlantSetupView: View {
             HStack {
 
                 Text("Species")
+                    .font(AppTheme.Typography.cardTitle)
+                    .foregroundStyle(AppTheme.Colors.leafGreen)
 
                 Spacer()
 
@@ -178,6 +231,7 @@ struct PlantSetupView: View {
                     text: $plantName
                 )
                 .multilineTextAlignment(.trailing)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .accessibilityLabel("Species")
             }
 
@@ -185,12 +239,6 @@ struct PlantSetupView: View {
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .padding(.vertical, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 28)
-                .fill(AppTheme.Colors.lavenderPanel)
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
-        )
     }
 
     private var saveButton: some View {
@@ -210,12 +258,12 @@ struct PlantSetupView: View {
                 Text(isLoading ? "Saving…" : "Save")
                     .font(.headline)
             }
-            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 56)
-            .background(AppTheme.Colors.secondaryAccent)
-            .clipShape(Capsule())
         }
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .tint(AppTheme.Colors.secondaryAccent)
         .disabled(
             plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
         )
@@ -312,6 +360,8 @@ struct PlantSetupView: View {
 }
 
 #Preview {
-    PlantSetupView()
-        .modelContainer(for: PlantProfile.self, inMemory: true)
+    NavigationStack {
+        PlantSetupView()
+    }
+    .modelContainer(for: PlantProfile.self, inMemory: true)
 }

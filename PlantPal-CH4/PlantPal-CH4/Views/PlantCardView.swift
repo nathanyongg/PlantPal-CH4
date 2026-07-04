@@ -36,6 +36,8 @@ struct PlantCardView: View {
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(plant.nickname), \(plant.name), \(statusText)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens plant details")
     }
 
 
@@ -44,13 +46,13 @@ struct PlantCardView: View {
         switch plant.alertLevel {
 
         case .healthy:
-            return .green
+            return AppTheme.Colors.success
 
         case .warning:
-            return .orange
+            return AppTheme.Colors.warning
 
         case .critical:
-            return .red
+            return AppTheme.Colors.critical
         }
     }
 

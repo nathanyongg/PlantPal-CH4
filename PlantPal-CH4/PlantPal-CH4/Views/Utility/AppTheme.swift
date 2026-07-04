@@ -28,6 +28,13 @@ enum AppTheme {
 
         static let lavenderPanel = Color("AppLavender")
         static let leafGreen = Color("AppLeafGreen")
+
+        static let insightPanel = Color("AppInsightPanel")
+
+        static let sensorTemperature = Color("AppSensorTemperature")
+        static let sensorHumidity = Color("AppSensorHumidity")
+        static let sensorSoil = Color("AppSensorSoil")
+        static let sensorLight = Color("AppSensorLight")
     }
 
     enum Typography {
