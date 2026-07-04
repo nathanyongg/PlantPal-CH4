@@ -163,7 +163,7 @@ extension DashboardView {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: PlantProfile.self,
+        for: PlantProfile.self, PlantHealthLogEntry.self,
         configurations: config
     )
 

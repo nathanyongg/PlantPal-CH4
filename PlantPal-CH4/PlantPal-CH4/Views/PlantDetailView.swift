@@ -15,16 +15,17 @@ struct PlantDetailView: View {
 
     let profile: PlantProfile
 
-    var onOpenChat: (() -> Void)? = nil
     var onAskMore: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @StateObject private var viewModel = PlantPipelineViewModel()
 
     @State private var reading: SensorReading?
     @State private var isFetchingReading = true
     @State private var fetchErrorMessage: String?
+    @State private var showingLog = false
 
     var body: some View {
         AppBackground {
@@ -41,6 +42,9 @@ struct PlantDetailView: View {
         .ignoresSafeArea(edges: .bottom)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingLog) {
+            PlantHealthLogView(profile: profile)
+        }
         .task {
             await fetchReading()
         }
@@ -61,12 +65,20 @@ struct PlantDetailView: View {
 
     private var loadingView: some View {
         VStack(spacing: 12) {
+            topBar
+
+            Spacer()
+
             ProgressView()
             Text("Reading your plant…")
                 .font(AppTheme.Typography.subtitle)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
+
+            Spacer()
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     // MARK: — Fetch error state
@@ -141,7 +153,33 @@ struct PlantDetailView: View {
                 nickname: profile.nickname,
                 imageData: profile.imageData
             )
+            recordCheckIn(reading: reading)
         }
+    }
+
+    // MARK: — Check-in logging
+    //
+    // One shared sensor means a reading only means something once
+    // it's been physically moved next to this plant and checked —
+    // so each completed check is what gets logged, not a continuous
+    // background feed.
+
+    private func recordCheckIn(reading: SensorReading) {
+        guard let level = viewModel.lastDetectionLevel else { return }
+        let status = level == .critical ? "critical" : level == .warning ? "warning" : "healthy"
+
+        let entry = PlantHealthLogEntry(
+            timestamp: reading.timestamp,
+            reading: reading,
+            status: status,
+            plant: profile
+        )
+        modelContext.insert(entry)
+
+        profile.lastReadingAt = reading.timestamp
+        profile.lastStatus = status
+
+        try? modelContext.save()
     }
 
     // MARK: — Top bar
@@ -163,16 +201,17 @@ struct PlantDetailView: View {
             Spacer()
 
             Button {
-                onOpenChat?()
+                showingLog = true
             } label: {
-                Image(systemName: "message.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(AppTheme.Colors.primaryAccent, in: Circle())
+                Image(systemName: "calendar")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.Colors.surface, in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Chat about this plant")
+            .accessibilityLabel("Today's log")
+            .accessibilityHint("Shows readings recorded for this plant today")
         }
         .padding(.top, 8)
     }
@@ -448,6 +487,7 @@ final class PlantPipelineViewModel: ObservableObject {
     @Published private(set) var cardData: PlantCardData?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var lastDetectionLevel: AlertLevel?
 
     private let detector = PlantHealthDetector()
     private let explainer = PlantExplainer()
@@ -465,6 +505,8 @@ final class PlantPipelineViewModel: ObservableObject {
         let statuses = detector.assess(reading, for: profile)
         let detection = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
         let metrics = SensorKind.allCases.map { $0.metric(reading: reading, thresholds: profile.thresholds()) }
+
+        lastDetectionLevel = detection.overallLevel
 
         guard !detection.isHealthy else {
             cardData = PlantCardData(
@@ -664,7 +706,10 @@ struct PlantMetric: Identifiable {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: PlantProfile.self, configurations: config)
+    let container = try! ModelContainer(
+        for: PlantProfile.self, PlantHealthLogEntry.self,
+        configurations: config
+    )
 
     let monstera = PlantProfile(
         name: "Monstera deliciosa",

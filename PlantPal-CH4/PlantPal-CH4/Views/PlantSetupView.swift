@@ -71,7 +71,6 @@ struct PlantSetupView: View {
                 .padding(.bottom, 40)
             }
         }
-        .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .photosPicker(
             isPresented: $showingPhotoPicker,

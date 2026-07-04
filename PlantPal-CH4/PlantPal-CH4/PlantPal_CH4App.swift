@@ -23,7 +23,7 @@ struct PlantPalApp: App {
             RootTabView()
                 .preferredColorScheme(appearance.colorScheme)
                 .appTextSize(textSize)
-                .modelContainer(for: PlantProfile.self)
+                .modelContainer(for: [PlantProfile.self, PlantHealthLogEntry.self])
         }
     }
 }
