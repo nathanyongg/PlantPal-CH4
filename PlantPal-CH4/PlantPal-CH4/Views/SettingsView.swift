@@ -27,10 +27,35 @@ struct SettingsView: View {
     @AppStorage("dailyReminder")
     private var dailyReminder = true
 
+    @StateObject private var ble = ESP32BLEManager.shared
+    @State private var showingDevicePairing = false
+
     var body: some View {
         NavigationStack {
             AppBackground {
                 Form {
+
+                    Section {
+
+                        Button {
+                            showingDevicePairing = true
+                        } label: {
+                            HStack {
+                                Text("Plant Sensor")
+                                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                                Spacer()
+                                Text(ble.hasPairedDevice ? "Paired" : "Not Paired")
+                                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                    } header: {
+                        Text("Device")
+                    } footer: {
+                        Text("One sensor works for every plant. Pair it once, then move it next to whichever plant you want to check.")
+                    }
 
                     Section {
 
@@ -102,6 +127,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .toolbarBackground(.clear, for: .navigationBar)
+            .sheet(isPresented: $showingDevicePairing) {
+                DevicePairingView()
+            }
         }
     }
 }

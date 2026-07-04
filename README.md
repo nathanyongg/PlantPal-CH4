@@ -59,6 +59,10 @@ the internet, allowing remote monitoring.
 Bluetooth is still used once during setup to send WiFi credentials from
 the phone to the ESP32.
 
+A single ESP32 sensor is shared across every plant, so checking on a
+specific plant means physically moving the sensor next to it before
+opening its details in the app.
+
 ## Final Solution
 
 Instead of machine learning, PlantPal compares incoming sensor readings
@@ -71,6 +75,10 @@ locally in SwiftData.
 If the readings are outside the safe range, Apple's Foundation Model
 creates a short explanation that is shown in the notification.
 
+PlantPal also supports Dynamic Type, VoiceOver, and spoken
+announcements through AVFoundation, so the app stays usable for
+people with visual impairments.
+
 ## Frameworks Used
 
 | Framework | Core Feature | Purpose in PlantPal |
@@ -80,6 +88,7 @@ creates a short explanation that is shown in the notification.
 | FoundationModels | On-device language model | Generate natural-language explanations for alerts |
 | PhotosUI | Photo Picker | Allow users to choose plant images |
 | CoreBluetooth | BLE communication | Initial ESP32 WiFi provisioning |
+| AVFoundation | Speech synthesis | Read important updates aloud for accessibility |
 | BackgroundTasks | Background execution | Periodically check plant status |
 | UserNotifications | Local notifications | Notify users when a plant needs attention |
 | URLSession | HTTP networking | Retrieve sensor data and call Gemini API |
@@ -91,6 +100,8 @@ creates a short explanation that is shown in the notification.
 -   Background tasks on iOS do not execute at fixed intervals.
 -   A production system should use real sensor data collected over
     several weeks and server-side notifications.
+-   The cloud endpoint is not deployed yet, so live readings are
+    unavailable until a real backend replaces the placeholder URL.
 
 ## Conclusion
 

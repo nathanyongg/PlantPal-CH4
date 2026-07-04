@@ -8,5 +8,7 @@
 	<string></string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string></string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.</string>
 </dict>
 </plist>
