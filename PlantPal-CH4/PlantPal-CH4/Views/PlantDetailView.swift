@@ -16,6 +16,8 @@ struct PlantDetailView: View {
     let profile: PlantProfile
 
     var onAskMore: (() -> Void)? = nil
+    
+    var previewReading: SensorReading? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -46,7 +48,12 @@ struct PlantDetailView: View {
             PlantHealthLogView(profile: profile)
         }
         .task {
-            await fetchReading()
+            if let previewReading {
+                reading = previewReading
+                isFetchingReading = false
+            } else {
+                await fetchReading()
+            }
         }
     }
 
@@ -722,7 +729,16 @@ struct PlantMetric: Identifiable {
     container.mainContext.insert(monstera)
 
     return NavigationStack {
-        PlantDetailView(profile: monstera)
+        PlantDetailView(
+            profile: monstera,
+                previewReading: SensorReading(
+                    timestamp: .now,
+                    temperature: 27,
+                    humidity: 60,
+                    soilMoisture: 1,
+                    lightIntensity: 18_000
+                )
+        )
     }
     .modelContainer(container)
 }
