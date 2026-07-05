@@ -17,13 +17,24 @@ struct PlantPalApp: App {
     @AppStorage("textSize")
     private var textSize: TextSize = .system
 
+    @AppStorage("hasCompletedOnboarding")
+    private var hasCompletedOnboarding = false
+
     var body: some Scene {
 
         WindowGroup {
-            RootTabView()
-                .preferredColorScheme(appearance.colorScheme)
-                .appTextSize(textSize)
-                .modelContainer(for: [PlantProfile.self, PlantHealthLogEntry.self])
+            Group {
+                if hasCompletedOnboarding {
+                    RootTabView()
+                } else {
+                    OnboardingView {
+                        hasCompletedOnboarding = true
+                    }
+                }
+            }
+            .preferredColorScheme(appearance.colorScheme)
+            .appTextSize(textSize)
+            .modelContainer(for: [PlantProfile.self, PlantHealthLogEntry.self])
         }
     }
 }
