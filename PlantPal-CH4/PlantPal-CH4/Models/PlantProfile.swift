@@ -35,10 +35,15 @@ final class PlantProfile {
     var minLightLux: Double         // lux
     var maxLightLux: Double
 
-    // Last known sensor reading — used for dashboard display
+    // Last known sensor reading — used for dashboard display.
+    // All nil until the user's first "Check conditions" tap.
     var lastReadingAt: Date?
     var lastStatus: String       // "healthy" | "warning" | "critical"
-    
+    var lastTemperatureC: Double?
+    var lastHumidityPercent: Double?
+    var lastSoilMoisturePercent: Double?
+    var lastLightLux: Double?
+
     @Attribute(.externalStorage)
     var imageData: Data?
 
@@ -100,6 +105,8 @@ extension PlantProfile {
         default:         return .healthy
         }
     }
+
+    var hasBeenChecked: Bool { lastReadingAt != nil }
 
     func thresholds() -> PlantThresholds {
         PlantThresholds(
