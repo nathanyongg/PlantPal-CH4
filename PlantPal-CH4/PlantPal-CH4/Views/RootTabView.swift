@@ -12,13 +12,8 @@ import SwiftUI
 struct RootTabView: View {
 
     init() {
-        // Make tab bar and navigation bar fully transparent
-        // so AppBackground shows through everywhere
-        let tabBarAppearance = UITabBarAppearance()
-        tabBarAppearance.configureWithTransparentBackground()
-        UITabBar.appearance().standardAppearance = tabBarAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
-
+        // Make navigation bar fully transparent so AppBackground
+        // shows through everywhere.
         let navBarAppearance = UINavigationBarAppearance()
         navBarAppearance.configureWithTransparentBackground()
         navBarAppearance.shadowColor = .clear
@@ -27,22 +22,14 @@ struct RootTabView: View {
     }
 
     var body: some View {
-
-        TabView {
-
-            Tab("Plants", systemImage: "leaf.fill") {
-                DashboardView()
-            }
-
-            Tab("Settings", systemImage: "gearshape.fill") {
-                SettingsView()
-            }
-        }
-        .tabViewSearchActivation(.searchTabSelection)
+        DashboardView()
     }
 }
 
 struct DashboardView: View {
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     @Query(sort: \PlantProfile.addedAt)
     private var plants: [PlantProfile]
@@ -50,6 +37,8 @@ struct DashboardView: View {
     @State private var searchText = ""
     @State private var navigateToAddPlant = false
     @State private var selectedPlant: PlantProfile?
+    @State private var editingPlant: PlantProfile?
+    @State private var showingSettings = false
 
     private var filteredPlants: [PlantProfile] {
 
@@ -67,67 +56,148 @@ struct DashboardView: View {
         }
     }
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 20),
-        GridItem(.flexible(), spacing: 20),
-    ]
-
     var body: some View {
         NavigationStack {
             AppBackground {
-                Group {
+                VStack(spacing: 16) {
+                    header
+                    searchField
+
                     if filteredPlants.isEmpty {
-                        VStack {
-                            Spacer()
-                            emptyState
-                            Spacer()
-                        }
+                        Spacer()
+                        emptyState
+                        Spacer()
                     } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 24) {
-                                ForEach(filteredPlants) { plant in
-                                    PlantCardView(plant: plant)
-                                        .onTapGesture {
-                                            selectedPlant = plant
-                                        }
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .safeAreaPadding(.bottom, 100)
-                        }
+                        plantList
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             }
-            .navigationTitle("Collections")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        navigateToAddPlant = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add Plant")
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $navigateToAddPlant) {
                 PlantSetupView()
             }
             .navigationDestination(item: $selectedPlant) { plant in
                 PlantDetailView(profile: plant)
             }
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search plants"
-            )
-            .scrollContentBackground(.hidden)
-            .toolbarBackground(.clear, for: .navigationBar)
+            .navigationDestination(item: $editingPlant) { plant in
+                PlantSetupView(editingProfile: plant)
+            }
+            .navigationDestination(isPresented: $showingSettings) {
+                SettingsView()
+            }
         }
+    }
+
+    // MARK: — Header (add/settings leading, title trailing)
+
+    private var header: some View {
+        HStack {
+            HStack(spacing: 12) {
+
+                Text("Collections")
+                    .font(.system(.largeTitle, design: .rounded).weight(.heavy))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Spacer()
+
+                Button {
+                    navigateToAddPlant = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.Colors.surface, in: Circle())
+                        .overlay {
+                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add Plant")
+
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.Colors.surface, in: Circle())
+                        .overlay {
+                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
+            }
+
+        }
+    }
+
+    // MARK: — Search field
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+            TextField("Search plants", text: $searchText)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(AppTheme.Colors.surface, in: Capsule())
+        .overlay {
+            Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: — Plant list
+
+    private var plantList: some View {
+        List {
+            ForEach(filteredPlants) { plant in
+                Button {
+                    selectedPlant = plant
+                } label: {
+                    PlantCardView(plant: plant)
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(
+                    EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0)
+                )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        delete(plant)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+
+                    Button {
+                        editingPlant = plant
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .tint(AppTheme.Colors.secondaryAccent)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .safeAreaPadding(.bottom, 40)
+    }
+
+    private func delete(_ plant: PlantProfile) {
+        modelContext.delete(plant)
+        try? modelContext.save()
     }
 }
 
-// MARK: Header
+// MARK: Empty state
 extension DashboardView {
     fileprivate var emptyState: some View {
 
@@ -142,7 +212,7 @@ extension DashboardView {
                 .font(AppTheme.Typography.sectionTitle)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("Add your first plant to begin monitoring its health.")
+            Text("Add your plant to begin monitoring its health.")
                 .font(AppTheme.Typography.body)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -163,7 +233,8 @@ extension DashboardView {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: PlantProfile.self, PlantHealthLogEntry.self,
+        for: PlantProfile.self,
+        PlantHealthLogEntry.self,
         configurations: config
     )
 

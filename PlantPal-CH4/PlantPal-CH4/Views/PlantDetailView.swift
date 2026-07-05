@@ -19,112 +19,99 @@ struct PlantDetailView: View {
     
     var previewReading: SensorReading? = nil
 
+    /// Preview/testing only — when set, skips the network fetch and
+    /// the Foundation Model call entirely and renders this data
+    /// directly, so the UI can be checked without either dependency.
+    var previewCardData: PlantCardData? = nil
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     @StateObject private var viewModel = PlantPipelineViewModel()
 
-    @State private var reading: SensorReading?
-    @State private var isFetchingReading = true
-    @State private var fetchErrorMessage: String?
+    @State private var isChecking = false
+    @State private var checkErrorMessage: String?
     @State private var showingLog = false
 
     var body: some View {
-        AppBackground {
-            Group {
-                if isFetchingReading {
-                    loadingView
-                } else if let reading {
-                    landingContent(reading: reading)
+        mainContent
+            .background(screenBackground)
+            .ignoresSafeArea(edges: .bottom)
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showingLog) {
+                PlantHealthLogView(profile: profile)
+            }
+            .task {
+                if let previewCardData {
+                    viewModel.setPreviewData(previewCardData)
                 } else {
-                    fetchErrorView
+                    viewModel.loadLastKnown(
+                        profile: profile,
+                        species: profile.name,
+                        nickname: profile.nickname,
+                        imageData: profile.imageData
+                    )
+                }
+            }
+    }
+
+    // MARK: — Background
+    //
+    // White with a faint diagonal-stroke texture, matching the
+    // Add/Edit Plant screen — distinct from the app's green themed
+    // background. Dark mode keeps the app's normal themed background.
+
+    private var screenBackground: some View {
+        Group {
+            if colorScheme == .dark {
+                AppBackground { Color.clear }
+            } else {
+                ZStack {
+                    Color.white
+                    Image("Background")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFill()
+                        .foregroundStyle(Color(red: 0xEF / 255, green: 0xEF / 255, blue: 0xEF / 255))
+                        .blur(radius: 4)
                 }
             }
         }
-        .ignoresSafeArea(edges: .bottom)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showingLog) {
-            PlantHealthLogView(profile: profile)
-        }
-        .task {
-            if let previewReading {
-                reading = previewReading
-                isFetchingReading = false
-            } else {
-                await fetchReading()
-            }
-        }
+        .ignoresSafeArea()
     }
 
-    private func fetchReading() async {
-        isFetchingReading = true
-        fetchErrorMessage = nil
+    // MARK: — Check conditions (explicit, one shared sensor)
+    //
+    // Opening this screen never touches the network on its own — the
+    // sensor has to physically be moved next to this plant first, so
+    // a reading only means something once the user confirms it's in
+    // place by tapping "Check conditions".
+
+    private func performCheck() async {
+        guard previewCardData == nil else { return }
+        isChecking = true
+        checkErrorMessage = nil
         do {
-            reading = try await PlantDataService().fetchLatestReading()
+            let freshReading = try await PlantDataService().fetchLatestReading()
+            await viewModel.refresh(
+                reading: freshReading,
+                profile: profile,
+                species: profile.name,
+                nickname: profile.nickname,
+                imageData: profile.imageData
+            )
+            recordCheckIn(reading: freshReading)
         } catch {
-            fetchErrorMessage = error.localizedDescription
+            checkErrorMessage = error.localizedDescription
         }
-        isFetchingReading = false
+        isChecking = false
     }
 
-    // MARK: — Loading state
+    // MARK: — Main content
 
-    private var loadingView: some View {
-        VStack(spacing: 12) {
-            topBar
-
-            Spacer()
-
-            ProgressView()
-            Text("Reading your plant…")
-                .font(AppTheme.Typography.subtitle)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-
-            Spacer()
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-    }
-
-    // MARK: — Fetch error state
-
-    private var fetchErrorView: some View {
-        VStack(spacing: 16) {
-            topBar
-
-            Spacer()
-
-            Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 44))
-                .foregroundStyle(AppTheme.Colors.warning)
-
-            Text(fetchErrorMessage ?? "Couldn't reach your plant sensor.")
-                .font(AppTheme.Typography.subtitle)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            Button("Try Again") {
-                Task { await fetchReading() }
-            }
-            .font(AppTheme.Typography.cardTitle)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
-            .background(AppTheme.Colors.secondaryAccent, in: Capsule())
-
-            Spacer()
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-    }
-
-    // MARK: — Loaded content
-
-    private func landingContent(reading: SensorReading) -> some View {
+    private var mainContent: some View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
@@ -134,10 +121,14 @@ struct PlantDetailView: View {
 
                     if let plant = viewModel.cardData {
                         metricsRow(plant)
+                    }
 
-                        if let errorMessage = viewModel.errorMessage {
-                            errorBanner(errorMessage)
-                        }
+                    checkConditionsButton
+
+                    if let checkErrorMessage {
+                        errorBanner(checkErrorMessage)
+                    } else if let errorMessage = viewModel.errorMessage {
+                        errorBanner(errorMessage)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -148,20 +139,47 @@ struct PlantDetailView: View {
             Color.clear.frame(height: 0)
         }
         .overlay(alignment: .bottom) {
-            if let plant = viewModel.cardData {
+            // Only a genuine result (from an actual check, not the
+            // "last known" placeholder) earns the "AI insight" label —
+            // it slides up from below once the Foundation Model
+            // actually finishes, rather than appearing instantly with
+            // stale/templated text.
+            if let plant = viewModel.cardData, plant.isGenuineInsight {
                 insightPanel(plant)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .task(id: reading.timestamp) {
-            await viewModel.refresh(
-                reading: reading,
-                profile: profile,
-                species: profile.name,
-                nickname: profile.nickname,
-                imageData: profile.imageData
-            )
-            recordCheckIn(reading: reading)
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: viewModel.cardData?.isGenuineInsight)
+    }
+
+    // MARK: — Check conditions button
+
+    private var checkConditionsButton: some View {
+        Button {
+            Task { await performCheck() }
+        } label: {
+            HStack(spacing: 10) {
+                if isChecking {
+                    ProgressView()
+                } else {
+                    Image(systemName: "magnifyingglass")
+                }
+                Text(isChecking ? "Checking…" : "Check conditions")
+                    .font(AppTheme.Typography.cardTitle)
+            }
+            .foregroundStyle(AppTheme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
         }
+        .buttonStyle(PressableButtonStyle())
+        .background(AppTheme.Colors.surface, in: Capsule())
+        .overlay {
+            Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+        }
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .disabled(isChecking || previewCardData != nil)
+        .accessibilityLabel("Check conditions")
+        .accessibilityHint("Reads the sensor now and records today's check-in")
     }
 
     // MARK: — Check-in logging
@@ -185,6 +203,10 @@ struct PlantDetailView: View {
 
         profile.lastReadingAt = reading.timestamp
         profile.lastStatus = status
+        profile.lastTemperatureC = reading.temperature
+        profile.lastHumidityPercent = reading.humidity
+        profile.lastSoilMoisturePercent = reading.soilMoisture
+        profile.lastLightLux = reading.lightIntensity
 
         try? modelContext.save()
     }
@@ -201,8 +223,11 @@ struct PlantDetailView: View {
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .frame(width: 40, height: 40)
                     .background(AppTheme.Colors.surface, in: Circle())
+                    .overlay {
+                        Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                    }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
             .accessibilityLabel("Back")
 
             Spacer()
@@ -215,8 +240,11 @@ struct PlantDetailView: View {
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .frame(width: 40, height: 40)
                     .background(AppTheme.Colors.surface, in: Circle())
+                    .overlay {
+                        Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                    }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
             .accessibilityLabel("Today's log")
             .accessibilityHint("Shows readings recorded for this plant today")
         }
@@ -273,6 +301,10 @@ struct PlantDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .padding(8)
         .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+        }
         .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
     }
 
@@ -296,6 +328,9 @@ struct PlantDetailView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(AppTheme.Colors.lavenderPanel, in: Capsule())
+        .overlay {
+            Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+        }
     }
 
     private func messageBubble(_ plant: PlantCardData) -> some View {
@@ -311,6 +346,10 @@ struct PlantDetailView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+        }
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 
@@ -379,7 +418,7 @@ struct PlantDetailView: View {
                             .padding(.vertical, 8)
                             .background(.white.opacity(0.22), in: Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableButtonStyle())
                 }
             }
             .padding(18)
@@ -390,7 +429,25 @@ struct PlantDetailView: View {
         .background(
             AppTheme.Colors.insightPanel
                 .clipShape(RoundedCorner(radius: 34, corners: [.topLeft, .topRight]))
+                .overlay {
+                    RoundedCorner(radius: 34, corners: [.topLeft, .topRight])
+                        .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                }
         )
+    }
+}
+
+// MARK: — Pressed-state feedback
+//
+// `.buttonStyle(.plain)` gives none by default, so these buttons felt
+// unresponsive when tapped — a slight scale/opacity dip on press.
+
+private struct PressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -441,6 +498,9 @@ private struct MetricCard: View {
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity)
         .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        // No outline here — the icon badge intentionally overlaps the
+        // top edge, and a full-perimeter stroke cuts an ugly line right
+        // across it. The shadow alone gives the card enough definition.
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(metric.statusLabel), \(metric.valueText), \(metric.idealRangeText)")
@@ -498,6 +558,42 @@ final class PlantPipelineViewModel: ObservableObject {
 
     private let detector = PlantHealthDetector()
     private let explainer = PlantExplainer()
+
+    /// Preview/testing only — injects mock data without touching the
+    /// network or Foundation Model.
+    func setPreviewData(_ cardData: PlantCardData) {
+        self.cardData = cardData
+    }
+
+    /// Renders whatever was recorded on the last "Check conditions" tap,
+    /// straight from the persisted profile fields — no network, no FM
+    /// call. Leaves `cardData` nil if this plant has never been checked.
+    func loadLastKnown(profile: PlantProfile, species: String, nickname: String, imageData: Data?) {
+        guard let lastReadingAt = profile.lastReadingAt,
+              let temperature = profile.lastTemperatureC,
+              let humidity = profile.lastHumidityPercent,
+              let soilMoisture = profile.lastSoilMoisturePercent,
+              let lightIntensity = profile.lastLightLux
+        else { return }
+
+        let reading = SensorReading(
+            timestamp: lastReadingAt, temperature: temperature, humidity: humidity,
+            soilMoisture: soilMoisture, lightIntensity: lightIntensity
+        )
+        let metrics = SensorKind.allCases.map { $0.metric(reading: reading, thresholds: profile.thresholds()) }
+        let level = profile.alertLevel
+        let (mood, emoji) = Self.mood(for: level)
+
+        lastDetectionLevel = level
+        cardData = PlantCardData(
+            species: species, nickname: nickname, imageData: imageData,
+            mood: mood, moodEmoji: emoji,
+            todaysMessage: level == .healthy ? "I'm feeling good today!" : "Something doesn't feel quite right today.",
+            aiInsight: "Last checked \(lastReadingAt.formatted(.relative(presentation: .named))). Tap \u{201C}Check conditions\u{201D} for a fresh reading.",
+            metrics: metrics,
+            isGenuineInsight: false
+        )
+    }
 
     func refresh(
         reading: SensorReading,
@@ -694,6 +790,10 @@ struct PlantCardData {
     var todaysMessage: String
     var aiInsight: String
     var metrics: [PlantMetric]
+    /// False for `loadLastKnown`'s templated placeholder text — the
+    /// insight panel only shows once there's a genuine result from an
+    /// actual check (or an honest "couldn't generate" fallback for one).
+    var isGenuineInsight: Bool = true
 }
 
 struct PlantMetric: Identifiable {
@@ -742,3 +842,61 @@ struct PlantMetric: Identifiable {
     }
     .modelContainer(container)
 }
+
+// Renders the fully-loaded UI directly — no network fetch, no
+// Foundation Model call — so the layout/theme can be checked on its
+// own without either dependency being available.
+#Preview("Mock data — no network/FM") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: PlantProfile.self, PlantHealthLogEntry.self,
+        configurations: config
+    )
+
+    let monstera = PlantProfile(
+        name: "Monstera deliciosa",
+        nickname: "My Mochi",
+        thresholds: PlantThresholds(
+            minTemperatureC: 18, maxTemperatureC: 26,
+            minHumidityPercent: 40, maxHumidityPercent: 80,
+            minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
+            minLightLux: 10_000, maxLightLux: 25_000
+        )
+    )
+    container.mainContext.insert(monstera)
+
+    let mockMetrics = [
+        PlantMetric(
+            systemImage: "drop.fill", tint: AppTheme.Colors.sensorSoil,
+            statusLabel: "Too dry", statusEmoji: "🥺",
+            valueText: "10%", idealRangeText: "Ideal 50% - 80%", progress: 0.1
+        ),
+        PlantMetric(
+            systemImage: "sun.max.fill", tint: AppTheme.Colors.sensorLight,
+            statusLabel: "Perfect", statusEmoji: "🤩",
+            valueText: "60%", idealRangeText: "Ideal 40% - 80%", progress: 0.6
+        ),
+        PlantMetric(
+            systemImage: "thermometer", tint: AppTheme.Colors.sensorTemperature,
+            statusLabel: "Too hot", statusEmoji: "🥵",
+            valueText: "28°C", idealRangeText: "Ideal 18°C - 26°C", progress: 0.9
+        ),
+    ]
+
+    let mockCardData = PlantCardData(
+        species: monstera.name,
+        nickname: monstera.nickname,
+        imageData: nil,
+        mood: "Stressed",
+        moodEmoji: "😣",
+        todaysMessage: "I'm so thirsty! My leaves are wilting a bit.",
+        aiInsight: "Monstera's soil has been dry for a few days. Water it soon to help it bounce back.",
+        metrics: mockMetrics
+    )
+
+    return NavigationStack {
+        PlantDetailView(profile: monstera, previewCardData: mockCardData)
+    }
+    .modelContainer(container)
+}
+
