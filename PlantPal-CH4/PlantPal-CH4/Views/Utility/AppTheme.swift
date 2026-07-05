@@ -30,11 +30,21 @@ enum AppTheme {
         static let leafGreen = Color("AppLeafGreen")
 
         static let insightPanel = Color("AppInsightPanel")
+        static let onboardingPanel = Color("AppOnboardingPanel")
 
         static let sensorTemperature = Color("AppSensorTemperature")
         static let sensorHumidity = Color("AppSensorHumidity")
         static let sensorSoil = Color("AppSensorSoil")
         static let sensorLight = Color("AppSensorLight")
+
+        /// The app's "outline theme" — a crisp border around cards and
+        /// pill buttons. A plain black stroke only reads well against
+        /// the light surfaces it was designed on; against this app's
+        /// dark surfaces (`surface`, `background`) it disappears, so
+        /// dark mode gets a translucent white stroke instead.
+        static func outline(for colorScheme: ColorScheme) -> Color {
+            colorScheme == .dark ? .white.opacity(0.35) : .black
+        }
     }
 
     enum Typography {

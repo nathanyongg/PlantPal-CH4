@@ -34,7 +34,7 @@ final class PlantExplainer {
                 to: prompt,
                 generating: PlantExplanation.self
             )
-            return response.content
+            return sanitized(response.content, detection: detection)
 
         } catch let error as LanguageModelSession.GenerationError {
             // Model-specific failures — guardrail violations, unsupported
@@ -46,6 +46,75 @@ final class PlantExplainer {
         }
     }
 
+    // MARK: — Safety net
+    //
+    // Even with a deterministic REQUIRED FIX handed to it, testing
+    // showed the on-device model still occasionally (a) inverts the
+    // water direction in cause/action despite being told which way it
+    // goes, or (b) falls back to a generic "move it closer to the
+    // window" plant-care reflex regardless of what was actually
+    // flagged. Getting the direction backwards is actively harmful
+    // advice, so this is checked in code rather than trusted to a
+    // second prompt tweak — anything that conflicts with the
+    // deterministic fix is overridden with it verbatim.
+    private func sanitized(_ explanation: PlantExplanation, detection: DetectionResult) -> PlantExplanation {
+        guard let primary = detection.primaryIssue else { return explanation }
+        var corrected = explanation
+
+        if actionConflicts(explanation, with: primary) {
+            corrected.cause = primary.reason.prefix(1).uppercased() + primary.reason.dropFirst()
+            corrected.action = primary.recommendedFix
+        }
+
+        let mentionsLight = primary.name != "Light"
+            && ["sunlight", "window", " light", "brighter", "dimmer"]
+                .contains { corrected.caretakerInsight.localizedCaseInsensitiveContains($0) }
+
+        if actionConflicts(explanation, with: primary) || mentionsLight {
+            let cause = corrected.cause.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+            let action = corrected.action.trimmingCharacters(in: .whitespaces)
+            corrected.caretakerInsight = "\(cause). \(action)"
+        }
+
+        return corrected
+    }
+
+    /// Checks the generated cause/action against the one direction
+    /// that's actually correct for the primary issue — a coarse
+    /// keyword check, but the failure mode it catches (recommending
+    /// the opposite of what's needed) is too costly to leave to prompt
+    /// wording alone. `cause` and `action` are checked independently:
+    /// testing showed either one can carry a wrong-direction phrase on
+    /// its own even when the other field is correct (e.g. cause says
+    /// "too much water" while action correctly says to water it).
+    private func actionConflicts(_ explanation: PlantExplanation, with primary: SensorStatus) -> Bool {
+        let wrongDirectionPhrases: [String]
+
+        switch (primary.name, primary.direction) {
+        case ("Soil moisture", .tooLow):
+            wrongDirectionPhrases = ["too much water", "overwater", "excess water", "waterlogged", "over-watered", "hold off", "stop water", "less water", "dry out", "don't water", "without water", "no water"]
+        case ("Soil moisture", .tooHigh):
+            wrongDirectionPhrases = ["too little water", "not enough water", "underwater", "under-watered", "lack of water", "water it", "water the plant", "water soon", "needs water", "give it water", "add water", "more water", "water now", "water me"]
+        case ("Temperature", .tooLow):
+            wrongDirectionPhrases = ["too hot", "too warm", "cool it down", "somewhere cooler", "cooler spot"]
+        case ("Temperature", .tooHigh):
+            wrongDirectionPhrases = ["too cold", "too cool", "warm it up", "somewhere warmer", "warmer spot"]
+        case ("Humidity", .tooLow):
+            wrongDirectionPhrases = ["too humid", "reduce humidity", "improve airflow", "less humid"]
+        case ("Humidity", .tooHigh):
+            wrongDirectionPhrases = ["too dry", "increase humidity", "more humid", "humidifier"]
+        case ("Light", .tooLow):
+            wrongDirectionPhrases = ["too bright", "too much light", "dimmer spot", "less light", "out of direct light"]
+        case ("Light", .tooHigh):
+            wrongDirectionPhrases = ["too dim", "too dark", "brighter spot", "more light"]
+        default:
+            wrongDirectionPhrases = []
+        }
+
+        let text = "\(explanation.cause) \(explanation.action)".lowercased()
+        return wrongDirectionPhrases.contains { text.contains($0) }
+    }
+
     // MARK: — System instructions
 
     private static func instructions(for species: String) -> String {
@@ -55,27 +124,17 @@ final class PlantExplainer {
         Plant: \(species)
 
         A rule-based detector has already evaluated this plant's sensor
-        readings against its healthy ranges. Your job is NOT to
-        re-diagnose from scratch — it's to explain the finding warmly and
-        correctly, and separately, speak AS the plant itself.
+        readings AND already decided the correct fix — you will be given
+        that fix directly in the prompt as "REQUIRED FIX". Your job is
+        NOT to re-diagnose or second-guess it; a small on-device model
+        reasoning freely about "too much vs. too little" is exactly how
+        this used to get watering advice backwards, so that decision is
+        made for you. Just phrase the given fix warmly and correctly,
+        and separately, speak AS the plant itself.
 
-        Critical reasoning rule — read this carefully:
-        Every reading can fail in one of two opposite directions — e.g.
-        soil moisture can be too dry OR waterlogged, temperature can be
-        too cold OR too hot, light can be too dim OR too bright. Always
-        check the detector's stated reason to see which direction
-        actually happened, and only recommend the fix that matches it.
-        If soil is waterlogged or overwatered, never tell the caretaker
-        to water more — tell them to hold off watering, improve
-        drainage, or let it dry out. Getting the direction backwards
-        makes the advice actively harmful, so this matters more than
-        anything else you generate.
-
-        The example sentences below are for TONE ONLY — they describe a
-        sunlight/watering scenario that may not match what's actually
-        being reported this time. Never reuse them verbatim or borrow
-        their specific details; always ground your wording in the exact
-        sensor values and flagged issues given to you in this call.
+        Never contradict or reverse the REQUIRED FIX you're given — if
+        it says to hold off watering, do not write anything implying
+        more water is needed, and vice versa.
 
         Tone for the caretaker-facing fields (cause, action,
         caretakerInsight, notificationTitle):
@@ -83,18 +142,19 @@ final class PlantExplainer {
           voice belongs only to plantMessage.
         - Warm and natural, like a knowledgeable friend — not clinical,
           not a form.
-        - caretakerInsight should read as 1-2 complete, flowing sentences
-          about the ACTUAL flagged issue (or actual good state), e.g. for
-          a plant genuinely low on light: "Monstera has been receiving
-          less sunlight than usual this week. Try moving them 30cm
-          closer to the window." Reference the real numbers you were
-          given, not the ones in this example.
+        - caretakerInsight is exactly two sentences built ONLY from the
+          data you were given this call: sentence one names the plant
+          and the specific reading that's out of range (using the real
+          number); sentence two is the REQUIRED FIX in your own words.
+          Do not mention sunlight, windows, or distance unless the
+          PRIMARY ISSUE given to you this call is actually about light.
         - Never recommend repotting or fertilizing as a first response
           to a single reading; those are last-resort suggestions only
           after the user reports the issue persists.
-        - If the detector verdict is HEALTHY, do not invent a problem —
-          caretakerInsight should simply affirm that things are on
-          track, naming whichever reading is genuinely closest to ideal.
+        - If there is no REQUIRED FIX (everything is healthy), do not
+          invent a problem — caretakerInsight should simply affirm that
+          things are on track, naming whichever reading is genuinely
+          closest to ideal.
 
         Tone for plantMessage:
         - The plant speaking for itself, first person, like a curious
@@ -115,37 +175,45 @@ final class PlantExplainer {
     // MARK: — Prompt construction
 
     private func buildPrompt(reading: SensorReading, detection: DetectionResult) -> String {
-        let verdict = detection.isHealthy
-            ? "HEALTHY — every reading is within range."
-            : detection.overallLevel == .critical ? "CRITICAL" : "WARNING"
+        guard let primary = detection.primaryIssue else {
+            return """
+            Detector verdict: HEALTHY — every reading is within range.
+            Reading time: \(reading.formattedTimestamp)
 
-        let task = detection.isHealthy
-            ? """
-              Every single reading above is comfortably within its ideal \
-              range. There is nothing wrong and nothing to change — do \
-              not suggest moving it, watering it more or less, or making \
-              it cooler/warmer/brighter/dimmer in any way. plantMessage \
-              must be a genuinely happy sentence naming one specific \
-              reading that's good (e.g. the temperature, the light, how \
-              moist the soil feels) without any request or complaint. \
-              caretakerInsight must be one affirming sentence with no \
-              suggested action at all. cause/action/notificationTitle \
-              can be brief filler like "Nothing to report" (urgency: \
-              Monitor).
-              """
-            : "Explain the most important flagged issue for the caretaker, and write the plant's own first-person message about how it feels."
+            All sensor values:
+            \(detection.fullSummary)
+
+            There is no REQUIRED FIX — every single reading is
+            comfortably within its ideal range. Do not suggest moving
+            it, watering it more or less, or making it
+            cooler/warmer/brighter/dimmer in any way. plantMessage must
+            be a genuinely happy sentence naming one specific reading
+            that's good. caretakerInsight must be one affirming sentence
+            with no suggested action at all. cause/action/
+            notificationTitle can be brief filler like "Nothing to
+            report" (urgency: Monitor).
+            """
+        }
+
+        let directionLabel = primary.direction == .tooLow ? "too LOW" : "too HIGH"
 
         return """
-        Detector verdict: \(verdict)
+        Detector verdict: \(detection.overallLevel == .critical ? "CRITICAL" : "WARNING")
         Reading time: \(reading.formattedTimestamp)
 
         All sensor values:
         \(detection.fullSummary)
 
-        Flagged issues:
+        Other flagged issues (secondary — focus on the primary issue below):
         \(detection.issuesSummary)
 
-        \(task)
+        PRIMARY ISSUE: \(primary.name) is \(directionLabel) — \(primary.reason). Currently \(primary.formattedValue).
+        REQUIRED FIX (already decided — phrase this warmly, do not reverse or contradict it): \(primary.recommendedFix)
+
+        Write cause/action/caretakerInsight/notificationTitle about the
+        primary issue only, with `action` built directly from the
+        REQUIRED FIX above. Then write the plant's first-person
+        plantMessage reflecting this same primary issue.
         """
     }
 }
