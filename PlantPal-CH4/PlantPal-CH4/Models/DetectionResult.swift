@@ -35,6 +35,24 @@ struct DetectionResult: Sendable {
             .map { "- \($0.name): \($0.formattedValue)" }
             .joined(separator: "\n")
     }
+
+    /// The single issue to build the explanation around when multiple
+    /// readings are flagged at once. Decided here, deterministically —
+    /// picking "the most important one" by free-form reasoning is
+    /// exactly where the Foundation Model tended to get confused and
+    /// invert the fix, so the app decides and the model just phrases it.
+    var primaryIssue: SensorStatus? {
+        let issues = statuses.filter { $0.level != .healthy }
+        guard !issues.isEmpty else { return nil }
+
+        let priorityOrder = ["Soil moisture", "Temperature", "Humidity", "Light"]
+        return issues.sorted { lhs, rhs in
+            if lhs.level != rhs.level { return lhs.level > rhs.level }
+            let lhsPriority = priorityOrder.firstIndex(of: lhs.name) ?? .max
+            let rhsPriority = priorityOrder.firstIndex(of: rhs.name) ?? .max
+            return lhsPriority < rhsPriority
+        }.first
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
