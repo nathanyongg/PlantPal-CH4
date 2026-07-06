@@ -103,6 +103,8 @@ struct DashboardView: View {
                 Text("Collections")
                     .font(.system(.largeTitle, design: .rounded).weight(.heavy))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
 
                 Spacer()
 
