@@ -27,12 +27,13 @@ struct SensorReading: Codable, Equatable, Sendable {
 // MARK: — Wire decoding
 //
 // ESP32 sends compact JSON:
-// {"t":24.6,"h":61.2,"m":45.0,"l":2048}
+// {"t":24.6,"h":61.2,"m":45.0,"l":2048,"rtc_timestamp":"2026-07-06T07:12:00Z"}
 //
 //   t → temperature in °C (DHT11 already outputs °C)
 //   h → humidity in %     (DHT11 already outputs %)
 //   m → soil moisture in % (firmware maps ADC → 0–100 before sending)
 //   l → raw photoresistor ADC value (0–4095 on ESP32 12-bit ADC)
+//   rtc_timestamp / timestamp / measured_at / created_at → reading time
 //
 // Only light needs conversion here. Temperature, humidity, and
 // soil moisture arrive in final units from the firmware.
@@ -41,15 +42,59 @@ struct SensorReading: Codable, Equatable, Sendable {
 extension SensorReading {
 
     private struct WirePayload: Decodable {
+        let timestamp: Date?
         let t: Double   // temperature °C
         let h: Double   // humidity %
         let m: Double   // soil moisture %
         let l: Double   // raw ADC (0–4095)
+
+        private enum CodingKeys: String, CodingKey {
+            case timestamp
+            case createdAt = "created_at"
+            case measuredAt = "measured_at"
+            case rtcTimestamp = "rtc_timestamp"
+            case t
+            case h
+            case m
+            case l
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.timestamp = try Self.decodeTimestamp(from: container)
+            self.t = try container.decode(Double.self, forKey: .t)
+            self.h = try container.decode(Double.self, forKey: .h)
+            self.m = try container.decode(Double.self, forKey: .m)
+            self.l = try container.decode(Double.self, forKey: .l)
+        }
+
+        private static func decodeTimestamp(
+            from container: KeyedDecodingContainer<CodingKeys>
+        ) throws -> Date? {
+            for key in [CodingKeys.rtcTimestamp, .measuredAt, .timestamp, .createdAt] {
+                if let epoch = try? container.decode(Double.self, forKey: key) {
+                    return Date(timeIntervalSince1970: epoch)
+                }
+
+                guard let value = try? container.decode(String.self, forKey: key),
+                      !value.isEmpty else { continue }
+
+                if let date = ISO8601DateFormatter.plantPalDate(from: value) {
+                    return date
+                }
+
+                if let epoch = Double(value) {
+                    return Date(timeIntervalSince1970: epoch)
+                }
+            }
+
+            return nil
+        }
     }
 
     init(wireData: Data, receivedAt: Date = Date()) throws {
         let payload = try JSONDecoder().decode(WirePayload.self, from: wireData)
-        self.timestamp      = receivedAt
+        self.timestamp      = payload.timestamp ?? receivedAt
         self.temperature    = payload.t
         self.humidity       = payload.h
         self.soilMoisture   = payload.m
@@ -74,6 +119,24 @@ extension SensorReading {
         let lux = (inverted / maxADC) * maxLux
         return lux.rounded()
     }
+}
+
+private extension ISO8601DateFormatter {
+    static func plantPalDate(from value: String) -> Date? {
+        plantPalWithFractionalSeconds.date(from: value) ?? plantPal.date(from: value)
+    }
+
+    static let plantPal: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static let plantPalWithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 }
 
 // ══════════════════════════════════════════════════════════════

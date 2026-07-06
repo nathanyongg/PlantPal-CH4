@@ -5,10 +5,9 @@ import Foundation
 // MARK: — BLEProtocol
 //
 // The GATT contract between this app and the ESP32 firmware.
-// One shared sensor, paired once per setup: the phone finds it
-// over BLE, hands it Wi-Fi credentials, and the ESP32 takes it
-// from there — everything after that (readings, the "worker"
-// endpoint PlantDataService talks to) happens over Wi-Fi, not BLE.
+// One shared sensor. The phone can hand it Wi-Fi credentials,
+// and for nearby testing the ESP32 can also stream live sensor
+// readings over BLE.
 //
 // These UUIDs must match the firmware's GATT service exactly.
 // The ones below are placeholders — swap in the real UUIDs the
@@ -29,6 +28,9 @@ enum BLEProtocol {
     /// Notify + read. The ESP32 reports provisioning progress here
     /// as a single-byte `ProvisioningStatus.rawValue`.
     static let provisioningStatusCharacteristicUUID = CBUUID(string: "7E570003-0000-1000-8000-00805F9B34FB")
+
+    /// Notify + read. The ESP32 sends compact SensorReading JSON here.
+    static let sensorReadingCharacteristicUUID = CBUUID(string: "7E570004-0000-1000-8000-00805F9B34FB")
 
     // MARK: — Payload
 

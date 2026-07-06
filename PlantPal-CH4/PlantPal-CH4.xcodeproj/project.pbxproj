@@ -30,12 +30,12 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		635908262FF39EFB0069A632 /* PlantPal-CH4 */ = {
+		635908262FF39EFB0069A632 /* ios */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				6C1481732FF4FB8C00A03EA5 /* Exceptions for "PlantPal-CH4" folder in "PlantPal-CH4" target */,
 			);
-			path = "PlantPal-CH4";
+			path = ios;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -57,7 +57,7 @@
 				6C1481092FF4F34C00A03EA5 /* .gitignore */,
 				6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */,
 				6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */,
-				635908262FF39EFB0069A632 /* PlantPal-CH4 */,
+				635908262FF39EFB0069A632 /* ios */,
 				635908252FF39EFB0069A632 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -86,7 +86,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				635908262FF39EFB0069A632 /* PlantPal-CH4 */,
+				635908262FF39EFB0069A632 /* ios */,
 			);
 			name = "PlantPal-CH4";
 			packageProductDependencies = (
@@ -299,10 +299,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q7PFUBX7QB;
+				DEVELOPMENT_TEAM = Y4648M7S2X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "PlantPal-CH4/Info.plist";
+				INFOPLIST_FILE = ios/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -333,10 +333,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q7PFUBX7QB;
+				DEVELOPMENT_TEAM = Y4648M7S2X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "PlantPal-CH4/Info.plist";
+				INFOPLIST_FILE = ios/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

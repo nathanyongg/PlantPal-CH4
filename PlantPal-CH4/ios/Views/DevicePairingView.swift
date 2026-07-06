@@ -161,8 +161,14 @@ struct DevicePairingView: View {
                 Text("Connected to \(ble.connectedDeviceName ?? "sensor")")
                     .font(AppTheme.Typography.cardTitle)
                     .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Text("Live readings are coming over Bluetooth.")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
             }
             .padding(.top, 24)
+
+            liveReadingCard
 
             VStack(spacing: 0) {
                 HStack {
@@ -213,6 +219,75 @@ struct DevicePairingView: View {
         )
         .padding(.horizontal, 24)
         .padding(.top, 12)
+    }
+
+    // MARK: — Live BLE reading
+
+    @ViewBuilder
+    private var liveReadingCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Bluetooth Reading", systemImage: "dot.radiowaves.left.and.right")
+                    .font(AppTheme.Typography.cardTitle)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Spacer()
+                if ble.latestReading == nil {
+                    ProgressView()
+                }
+            }
+
+            if let reading = ble.latestReading {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10)
+                    ],
+                    spacing: 10
+                ) {
+                    readingMetric("Temp", value: "\(Int(reading.temperature.rounded()))°C", icon: "thermometer")
+                    readingMetric("Humidity", value: "\(Int(reading.humidity.rounded()))%", icon: "humidity.fill")
+                    readingMetric("Soil", value: "\(Int(reading.soilMoisture.rounded()))%", icon: "drop.fill")
+                    readingMetric("Light", value: "\(Int(reading.lightIntensity.rounded())) lux", icon: "sun.max.fill")
+                }
+
+                Text("Updated \(reading.formattedTimestamp)")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            } else if let error = ble.latestReadingError {
+                Text(error)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.warning)
+            } else {
+                Text("Waiting for the ESP32 to send its first sensor packet.")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding()
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func readingMetric(_ title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.Colors.leafGreen)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                Text(value)
+                    .font(AppTheme.Typography.cardTitle)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: — Failure
