@@ -34,7 +34,7 @@ struct PlantDetailView: View {
 
     var body: some View {
         mainContent
-            .background(screenBackground)
+            .background(AppBackground { Color.clear })
             .ignoresSafeArea(edges: .bottom)
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
@@ -53,31 +53,6 @@ struct PlantDetailView: View {
                     )
                 }
             }
-    }
-
-    // MARK: — Background
-    //
-    // White with a faint diagonal-stroke texture, matching the
-    // Add/Edit Plant screen — distinct from the app's green themed
-    // background. Dark mode keeps the app's normal themed background.
-
-    private var screenBackground: some View {
-        Group {
-            if colorScheme == .dark {
-                AppBackground { Color.clear }
-            } else {
-                ZStack {
-                    Color.white
-                    Image("Background")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFill()
-                        .foregroundStyle(Color(red: 0xEF / 255, green: 0xEF / 255, blue: 0xEF / 255))
-                        .blur(radius: 4)
-                }
-            }
-        }
-        .ignoresSafeArea()
     }
 
     // MARK: — Check conditions (explicit, one shared sensor)
@@ -132,6 +107,9 @@ struct PlantDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 140) // room for the insight panel
+            }
+            .refreshable {
+                await performCheck()
             }
 
             Color.clear.frame(height: 0)

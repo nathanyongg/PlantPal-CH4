@@ -31,17 +31,11 @@ struct AppBackground<Content: View>: View {
     private var backgroundLayer: some View {
         ZStack {
             AppTheme.Colors.background
-
-            Image("Background")
-                .resizable()
-                .scaledToFill()
-                .opacity(backgroundOpacity)
-                .blur(radius: 4)
         }
         .ignoresSafeArea()
     }
 
     private var backgroundOpacity: Double {
-        colorScheme == .dark ? 0.12 : 1
+        colorScheme == .dark ? 0.12 : 0
     }
 }

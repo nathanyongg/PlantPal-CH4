@@ -144,6 +144,20 @@ struct DashboardView: View {
                 .foregroundStyle(AppTheme.Colors.textSecondary)
             TextField("Search plants", text: $searchText)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

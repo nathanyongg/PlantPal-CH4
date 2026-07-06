@@ -24,16 +24,6 @@ struct OnboardingView: View {
 
     private var page: OnboardingPage { pages[currentPage] }
 
-    /// The onboarding "black border" look only reads well against the
-    /// light surfaces it was designed on — against this screen's dark
-    /// background those same black strokes disappear. Anything whose
-    /// own fill is scheme-dependent (i.e. `AppTheme.Colors.surface`)
-    /// uses this instead; elements with a fixed white/green fill keep
-    /// the plain black stroke since their background never changes.
-    private var adaptiveStroke: Color {
-        colorScheme == .dark ? .white.opacity(0.35) : .black
-    }
-
     var body: some View {
         ZStack {
             AppBackground { Color.clear }
@@ -91,7 +81,7 @@ struct OnboardingView: View {
                 .frame(width: 40, height: 40)
                 .background(AppTheme.Colors.surface, in: Circle())
                 .overlay {
-                    Circle().stroke(adaptiveStroke, lineWidth: 1.5)
+                    Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
                 }
         }
         .buttonStyle(.plain)
@@ -137,7 +127,7 @@ struct OnboardingView: View {
             .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
             .overlay {
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(adaptiveStroke, lineWidth: 1.5)
+                    .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
             }
             .fixedSize()
     }
@@ -149,20 +139,18 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(page.title)
                     .font(.system(.title, design: .rounded).weight(.bold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
                     .id(page.title)
                     .transition(.opacity)
 
                 Text(page.subtitle)
                     .font(AppTheme.Typography.body)
-                    .foregroundStyle(AppTheme.Colors.textPrimary.opacity(0.75))
+                    .foregroundStyle(.white.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
                     .id(page.subtitle)
                     .transition(.opacity)
             }
-
-            pageDots
 
             VStack(spacing: 12) {
                 Button {
@@ -170,13 +158,13 @@ struct OnboardingView: View {
                 } label: {
                     Text(isLastPage ? "Let's Start" : "Next")
                         .font(.headline)
-                        .foregroundStyle(.black)
+                        .foregroundStyle(AppTheme.Colors.onboardingPanel)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                 }
                 .background(.white, in: Capsule())
                 .overlay {
-                    Capsule().stroke(.black, lineWidth: 1.5)
+                    Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
                 }
 
                 // Always present (never removed from the layout) so the
@@ -193,13 +181,17 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                 }
+                .background(Color(red: 0x6B / 255, green: 0x8F / 255, blue: 0x52 / 255), in: Capsule())
                 .overlay {
-                    Capsule().stroke(adaptiveStroke, lineWidth: 1.5)
+                    Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
                 }
                 .opacity(isLastPage ? 0 : 1)
                 .disabled(isLastPage)
                 .accessibilityHidden(isLastPage)
             }
+
+            pageDots
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(24)
         .padding(.bottom, 40)
@@ -209,7 +201,7 @@ struct OnboardingView: View {
                 .fill(AppTheme.Colors.onboardingPanel)
                 .overlay(
                     UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32, style: .continuous)
-                        .stroke(adaptiveStroke, lineWidth: 2)
+                        .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 2)
                 )
                 .ignoresSafeArea(edges: .bottom)
         )
