@@ -11,9 +11,9 @@ internal import Combine
 // connection you set up once (and revisit only if you change
 // Wi-Fi networks or swap the sensor).
 //
-// Flow: scan → connect → discover the GATT service → write Wi-Fi
-// credentials → watch the status characteristic until the ESP32
-// reports connected/failed.
+// Flow: scan → connect → discover the GATT service → subscribe
+// to live readings. Wi-Fi provisioning remains available, but
+// nearby sensor data can now travel over BLE too.
 // ══════════════════════════════════════════════════════════════
 
 @MainActor
@@ -47,12 +47,15 @@ final class ESP32BLEManager: NSObject, ObservableObject {
     @Published private(set) var discoveredDevices: [DiscoveredDevice] = []
     @Published private(set) var phase: ConnectionPhase = .disconnected
     @Published private(set) var connectedDeviceName: String?
+    @Published private(set) var latestReading: SensorReading?
+    @Published private(set) var latestReadingError: String?
 
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var connectedPeripheral: CBPeripheral?
     private var credentialsCharacteristic: CBCharacteristic?
     private var statusCharacteristic: CBCharacteristic?
+    private var sensorReadingCharacteristic: CBCharacteristic?
 
     private static let pairedDeviceKey = "pairedESP32DeviceIdentifier"
 
@@ -150,8 +153,18 @@ final class ESP32BLEManager: NSObject, ObservableObject {
         connectedPeripheral = nil
         credentialsCharacteristic = nil
         statusCharacteristic = nil
+        sensorReadingCharacteristic = nil
         connectedDeviceName = nil
         phase = .disconnected
+    }
+
+    private func handleSensorReadingData(_ data: Data) {
+        do {
+            latestReading = try SensorReading(wireData: data)
+            latestReadingError = nil
+        } catch {
+            latestReadingError = "Couldn't decode BLE reading: \(error.localizedDescription)"
+        }
     }
 }
 
@@ -219,7 +232,11 @@ extension ESP32BLEManager: CBPeripheralDelegate {
         }
         for service in services where service.uuid == BLEProtocol.serviceUUID {
             peripheral.discoverCharacteristics(
-                [BLEProtocol.wifiCredentialsCharacteristicUUID, BLEProtocol.provisioningStatusCharacteristicUUID],
+                [
+                    BLEProtocol.wifiCredentialsCharacteristicUUID,
+                    BLEProtocol.provisioningStatusCharacteristicUUID,
+                    BLEProtocol.sensorReadingCharacteristicUUID
+                ],
                 for: service
             )
         }
@@ -244,12 +261,21 @@ extension ESP32BLEManager: CBPeripheralDelegate {
                 statusCharacteristic = characteristic
                 peripheral.setNotifyValue(true, for: characteristic)
 
+            case BLEProtocol.sensorReadingCharacteristicUUID:
+                sensorReadingCharacteristic = characteristic
+                if characteristic.properties.contains(.notify) {
+                    peripheral.setNotifyValue(true, for: characteristic)
+                }
+                if characteristic.properties.contains(.read) {
+                    peripheral.readValue(for: characteristic)
+                }
+
             default:
                 break
             }
         }
 
-        if credentialsCharacteristic != nil {
+        if credentialsCharacteristic != nil || sensorReadingCharacteristic != nil {
             phase = .readyToProvision
             pairedDeviceIdentifier = peripheral.identifier
         }
@@ -273,6 +299,12 @@ extension ESP32BLEManager: CBPeripheralDelegate {
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        if characteristic.uuid == BLEProtocol.sensorReadingCharacteristicUUID {
+            guard error == nil, let data = characteristic.value else { return }
+            handleSensorReadingData(data)
+            return
+        }
+
         guard
             characteristic.uuid == BLEProtocol.provisioningStatusCharacteristicUUID,
             error == nil,

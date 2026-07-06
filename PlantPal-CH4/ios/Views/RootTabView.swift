@@ -39,6 +39,7 @@ struct DashboardView: View {
     @State private var selectedPlant: PlantProfile?
     @State private var editingPlant: PlantProfile?
     @State private var showingSettings = false
+    @State private var showingDevicePairing = false
 
     private var filteredPlants: [PlantProfile] {
 
@@ -87,6 +88,9 @@ struct DashboardView: View {
             .navigationDestination(isPresented: $showingSettings) {
                 SettingsView()
             }
+            .sheet(isPresented: $showingDevicePairing) {
+                DevicePairingView()
+            }
         }
     }
 
@@ -116,6 +120,21 @@ struct DashboardView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add Plant")
+
+                Button {
+                    showingDevicePairing = true
+                } label: {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.Colors.surface, in: Circle())
+                        .overlay {
+                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Test Plant Sensor Pairing")
 
                 Button {
                     showingSettings = true
