@@ -60,7 +60,7 @@ struct PlantHealthLogView: View {
                 .font(AppTheme.Typography.cardTitle)
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("\(profile.nickname) hasn't been checked today. Move the sensor next to it and open its details to log a reading.")
+            Text("\(profile.nickname) hasn't been checked today yet. It checks in automatically, or open its details and tap \u{201C}Check conditions\u{201D} to check now.")
                 .font(AppTheme.Typography.subtitle)
                 .foregroundStyle(AppTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)

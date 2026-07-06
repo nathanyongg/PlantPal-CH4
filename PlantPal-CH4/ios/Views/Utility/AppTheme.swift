@@ -37,13 +37,12 @@ enum AppTheme {
         static let sensorSoil = Color("AppSensorSoil")
         static let sensorLight = Color("AppSensorLight")
 
-        /// The app's "outline theme" — a crisp border around cards and
-        /// pill buttons. A plain black stroke only reads well against
-        /// the light surfaces it was designed on; against this app's
-        /// dark surfaces (`surface`, `background`) it disappears, so
-        /// dark mode gets a translucent white stroke instead.
+        /// Light mode is borderless — cards and buttons are told apart
+        /// by fill and shadow alone. Dark mode still needs a visible
+        /// edge (its surfaces sit close in value to the background),
+        /// so it keeps a translucent white stroke.
         static func outline(for colorScheme: ColorScheme) -> Color {
-            colorScheme == .dark ? .white.opacity(0.35) : .black
+            colorScheme == .dark ? .white.opacity(0.35) : .clear
         }
     }
 

@@ -20,6 +20,19 @@ struct PlantPalApp: App {
     @AppStorage("hasCompletedOnboarding")
     private var hasCompletedOnboarding = false
 
+    // Built explicitly (rather than via the `.modelContainer(for:)` view
+    // modifier) so AutoRefreshScheduler can share the exact same
+    // container the UI observes — its background checks need to land
+    // in the same store Collections/Detail are querying.
+    private let sharedModelContainer: ModelContainer = {
+        try! ModelContainer(for: PlantProfile.self, PlantHealthLogEntry.self)
+    }()
+
+    init() {
+        // Must be registered before the app finishes launching.
+        AutoRefreshScheduler.shared.registerBackgroundTask()
+    }
+
     var body: some Scene {
 
         WindowGroup {
@@ -34,7 +47,11 @@ struct PlantPalApp: App {
             }
             .preferredColorScheme(appearance.colorScheme)
             .appTextSize(textSize)
-            .modelContainer(for: [PlantProfile.self, PlantHealthLogEntry.self])
+            .modelContainer(sharedModelContainer)
+            .task {
+                AutoRefreshScheduler.shared.start(with: sharedModelContainer)
+                AutoRefreshScheduler.shared.scheduleBackgroundRefresh()
+            }
         }
     }
 }

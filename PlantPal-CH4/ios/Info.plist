@@ -10,5 +10,14 @@
 	<string></string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.PlantPal.refresh</string>
+	</array>
 </dict>
 </plist>

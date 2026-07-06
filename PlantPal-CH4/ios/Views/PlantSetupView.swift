@@ -84,7 +84,7 @@ struct PlantSetupView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
-        .background(screenBackground)
+        .background(AppBackground { Color.clear })
         .toolbar(.hidden, for: .navigationBar)
         .photosPicker(
             isPresented: $showingPhotoPicker,
@@ -120,31 +120,6 @@ struct PlantSetupView: View {
         } message: {
             Text("This removes \(editingProfile?.nickname ?? "this plant") and its check-in history. This can't be undone.")
         }
-    }
-
-    // MARK: — Background
-    //
-    // White with a faint diagonal-stroke texture — distinct from the
-    // app's green themed background, matching the Add/Edit Plant
-    // mockup. Dark mode keeps the app's normal themed background.
-
-    private var screenBackground: some View {
-        Group {
-            if colorScheme == .dark {
-                AppBackground { Color.clear }
-            } else {
-                ZStack {
-                    Color.white
-                    Image("Background")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFill()
-                        .foregroundStyle(Color(red: 0xEF / 255, green: 0xEF / 255, blue: 0xEF / 255))
-                        .blur(radius: 4)
-                }
-            }
-        }
-        .ignoresSafeArea()
     }
 
     /// `leafGreen`'s dark variant is nearly the same shade as the form
