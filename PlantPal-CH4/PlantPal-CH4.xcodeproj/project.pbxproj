@@ -20,7 +20,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		6C1481732FF4FB8C00A03EA5 /* Exceptions for "PlantPal-CH4" folder in "PlantPal-CH4" target */ = {
+		6C1481732FF4FB8C00A03EA5 /* Exceptions for "ios" folder in "PlantPal-CH4" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -33,7 +33,7 @@
 		635908262FF39EFB0069A632 /* ios */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				6C1481732FF4FB8C00A03EA5 /* Exceptions for "PlantPal-CH4" folder in "PlantPal-CH4" target */,
+				6C1481732FF4FB8C00A03EA5 /* Exceptions for "ios" folder in "PlantPal-CH4" target */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -299,7 +299,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Y4648M7S2X;
+				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
@@ -333,7 +333,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Y4648M7S2X;
+				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
