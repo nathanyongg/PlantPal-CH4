@@ -24,12 +24,24 @@ struct PlantSetupView: View {
     /// creating a new one — prefilled from its current values.
     var editingProfile: PlantProfile? = nil
 
+    /// The device chosen in ConnectDeviceView before this screen ever
+    /// appears — new plants always arrive with one already selected.
+    var preselectedDeviceID: String? = nil
+    var preselectedDeviceName: String? = nil
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
+    @Query private var allProfiles: [PlantProfile]
+
+    @StateObject private var ble = ESP32BLEManager.shared
+
     @State private var plantName: String
     @State private var nickname: String
+    @State private var linkedDeviceID: String?
+    @State private var linkedDeviceName: String?
+    @State private var showingDevicePicker = false
     @State private var isLoading = false
     @State private var phase = SetupPhase.idle
     @State private var selectedPhoto: PhotosPickerItem?
@@ -40,13 +52,39 @@ struct PlantSetupView: View {
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
 
-    init(editingProfile: PlantProfile? = nil) {
+    init(
+        editingProfile: PlantProfile? = nil,
+        preselectedDeviceID: String? = nil,
+        preselectedDeviceName: String? = nil
+    ) {
         self.editingProfile = editingProfile
+        self.preselectedDeviceID = preselectedDeviceID
+        self.preselectedDeviceName = preselectedDeviceName
         _plantName = State(initialValue: editingProfile?.name ?? "")
         _nickname = State(initialValue: editingProfile?.nickname ?? "")
+        _linkedDeviceID = State(initialValue: editingProfile?.linkedDeviceID ?? preselectedDeviceID)
+        _linkedDeviceName = State(initialValue: editingProfile?.linkedDeviceName ?? preselectedDeviceName)
         if let data = editingProfile?.imageData, let image = UIImage(data: data) {
             _plantImage = State(initialValue: image)
         }
+    }
+
+    /// Devices already dedicated to a different plant — offering them
+    /// here would let two plants fight over one sensor.
+    private var deviceClaimedByAnotherPlant: Bool {
+        guard let linkedDeviceID else { return false }
+        return allProfiles.contains {
+            $0.linkedDeviceID == linkedDeviceID && $0.persistentModelID != editingProfile?.persistentModelID
+        }
+    }
+
+    private var availableDevices: [ESP32BLEManager.DiscoveredDevice] {
+        let claimedElsewhere = Set(
+            allProfiles
+                .filter { $0.persistentModelID != editingProfile?.persistentModelID }
+                .compactMap(\.linkedDeviceID)
+        )
+        return ble.discoveredDevices.filter { !claimedElsewhere.contains($0.id.uuidString) }
     }
 
     enum SetupPhase {
@@ -60,6 +98,8 @@ struct PlantSetupView: View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 20) {
                 topBar
+
+                deviceSection
 
                 photoSection
                     .confirmationDialog(
@@ -84,7 +124,7 @@ struct PlantSetupView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
-        .background(screenBackground)
+        .background(AppBackground { Color.clear })
         .toolbar(.hidden, for: .navigationBar)
         .photosPicker(
             isPresented: $showingPhotoPicker,
@@ -122,31 +162,6 @@ struct PlantSetupView: View {
         }
     }
 
-    // MARK: — Background
-    //
-    // White with a faint diagonal-stroke texture — distinct from the
-    // app's green themed background, matching the Add/Edit Plant
-    // mockup. Dark mode keeps the app's normal themed background.
-
-    private var screenBackground: some View {
-        Group {
-            if colorScheme == .dark {
-                AppBackground { Color.clear }
-            } else {
-                ZStack {
-                    Color.white
-                    Image("Background")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFill()
-                        .foregroundStyle(Color(red: 0xEF / 255, green: 0xEF / 255, blue: 0xEF / 255))
-                        .blur(radius: 4)
-                }
-            }
-        }
-        .ignoresSafeArea()
-    }
-
     /// `leafGreen`'s dark variant is nearly the same shade as the form
     /// card's own background, so the labels disappear in dark mode —
     /// swap to a brighter green there. Light mode is untouched.
@@ -172,43 +187,125 @@ struct PlantSetupView: View {
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
             HStack {
-                Button {
+                IconCircleButton(systemImage: "chevron.left", accessibilityLabel: "Back") {
                     dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(AppTheme.Colors.surface, in: Circle())
-                        .overlay {
-                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                        }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
 
                 Spacer()
 
                 if editingProfile != nil {
-                    Button {
+                    IconCircleButton(
+                        systemImage: "trash",
+                        tint: AppTheme.Colors.critical,
+                        accessibilityLabel: "Delete Plant",
+                        accessibilityHint: "Removes this plant and its check-in history"
+                    ) {
                         showingDeleteConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppTheme.Colors.critical)
-                            .frame(width: 40, height: 40)
-                            .background(AppTheme.Colors.surface, in: Circle())
-                            .overlay {
-                                Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                            }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Delete Plant")
-                    .accessibilityHint("Removes this plant and its check-in history")
                 }
             }
         }
         .padding(.top, 8)
+    }
+
+    // MARK: — Device (each plant needs its own paired sensor)
+
+    private var deviceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Device")
+                .font(AppTheme.Typography.cardTitle)
+                .foregroundStyle(formLabelColor)
+
+            Button {
+                showingDevicePicker.toggle()
+                if showingDevicePicker {
+                    ble.startScanning()
+                } else {
+                    ble.stopScanning()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "wifi")
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(linkedDeviceName ?? "No device selected")
+                            .font(AppTheme.Typography.cardTitle)
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                        if linkedDeviceID == nil {
+                            Text("Tap to connect a sensor")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        } else if deviceClaimedByAnotherPlant {
+                            Text("Already linked to another plant")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.Colors.critical)
+                        } else {
+                            Text("Signal Strong")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: showingDevicePicker ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+                .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous), colorScheme: colorScheme)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Device")
+            .accessibilityValue(linkedDeviceName ?? "No device selected")
+            .accessibilityHint("Shows nearby devices to pair with this plant")
+
+            if showingDevicePicker {
+                devicePickerList
+            }
+        }
+        .onDisappear { ble.stopScanning() }
+    }
+
+    private var devicePickerList: some View {
+        VStack(spacing: 8) {
+            if availableDevices.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Looking for nearby devices…")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .padding(.vertical, 10)
+            } else {
+                ForEach(availableDevices) { device in
+                    Button {
+                        linkedDeviceID = device.id.uuidString
+                        linkedDeviceName = device.name
+                        showingDevicePicker = false
+                        ble.stopScanning()
+                    } label: {
+                        HStack {
+                            Text(device.name)
+                                .foregroundStyle(AppTheme.Colors.textPrimary)
+                            Spacer()
+                            if linkedDeviceID == device.id.uuidString {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(AppTheme.Colors.success)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     // MARK: — Photo section
@@ -225,7 +322,7 @@ struct PlantSetupView: View {
                 }
                 .frame(height: 450)
             } else {
-                RoundedRectangle(cornerRadius: 28)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                     .fill(.ultraThinMaterial)
                     .overlay {
                         VStack(spacing: 12) {
@@ -239,11 +336,8 @@ struct PlantSetupView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 450)
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28)
-                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.large), colorScheme: colorScheme)
         .onTapGesture {
             showingPhotoOptions = true
         }
@@ -263,9 +357,7 @@ struct PlantSetupView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
             .background(AppTheme.Colors.surface, in: Capsule())
-            .overlay {
-                Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-            }
+            .appOutline(Capsule(), colorScheme: colorScheme)
             .padding(18)
         }
     }
@@ -279,14 +371,11 @@ struct PlantSetupView: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xlarge, style: .continuous)
                 .fill(AppTheme.Colors.leafGreen)
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-        }
+        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.xlarge, style: .continuous), colorScheme: colorScheme)
     }
 
     private var inputCard: some View {
@@ -339,15 +428,15 @@ struct PlantSetupView: View {
         }
         .padding()
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.card), colorScheme: colorScheme)
     }
 
     private var isSaveDisabled: Bool {
-        plantName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading
+        plantName.trimmingCharacters(in: .whitespaces).isEmpty
+            || isLoading
+            || linkedDeviceID == nil
+            || deviceClaimedByAnotherPlant
     }
 
     private var saveButton: some View {
@@ -373,9 +462,7 @@ struct PlantSetupView: View {
         }
         .buttonStyle(.plain)
         .background(AppTheme.Colors.secondaryAccent, in: Capsule())
-        .overlay {
-            Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-        }
+        .appOutline(Capsule(), colorScheme: colorScheme)
         .opacity(isSaveDisabled ? 0.5 : 1)
         .disabled(isSaveDisabled)
         .accessibilityLabel(isLoading ? "Saving plant" : "Save plant")
@@ -453,7 +540,9 @@ struct PlantSetupView: View {
         let profile = PlantProfile(
             name: trimmedName,
             nickname: displayNickname,
-            thresholds: thresholds
+            thresholds: thresholds,
+            linkedDeviceID: linkedDeviceID,
+            linkedDeviceName: linkedDeviceName
         )
         profile.imageData = plantImage?.jpegData(compressionQuality: 0.85)
 
@@ -515,6 +604,8 @@ struct PlantSetupView: View {
         phase = .saving
         profile.name = trimmedName
         profile.nickname = displayNickname
+        profile.linkedDeviceID = linkedDeviceID
+        profile.linkedDeviceName = linkedDeviceName
         if let plantImage {
             profile.imageData = plantImage.jpegData(compressionQuality: 0.85)
         }

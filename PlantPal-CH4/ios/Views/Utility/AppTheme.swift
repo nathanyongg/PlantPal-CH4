@@ -37,13 +37,18 @@ enum AppTheme {
         static let sensorSoil = Color("AppSensorSoil")
         static let sensorLight = Color("AppSensorLight")
 
-        /// The app's "outline theme" — a crisp border around cards and
-        /// pill buttons. A plain black stroke only reads well against
-        /// the light surfaces it was designed on; against this app's
-        /// dark surfaces (`surface`, `background`) it disappears, so
-        /// dark mode gets a translucent white stroke instead.
+        /// Solid CTA green used for onboarding's filled pill buttons
+        /// (Skip, Get Started) and the device-pairing flow. Fixed rather
+        /// than light/dark adaptive since these buttons stay a solid
+        /// green regardless of scheme.
+        static let onboardingAccent = Color(red: 0x87 / 255, green: 0xC1 / 255, blue: 0x7E / 255)
+
+        /// Light mode is borderless — cards and buttons are told apart
+        /// by fill and shadow alone. Dark mode still needs a visible
+        /// edge (its surfaces sit close in value to the background),
+        /// so it keeps a translucent white stroke.
         static func outline(for colorScheme: ColorScheme) -> Color {
-            colorScheme == .dark ? .white.opacity(0.35) : .black
+            colorScheme == .dark ? .white.opacity(0.35) : .clear
         }
     }
 
@@ -58,7 +63,9 @@ enum AppTheme {
     }
 
     enum Radius {
+        static let xlarge: CGFloat = 32
         static let large: CGFloat = 28
+        static let card: CGFloat = 24
         static let medium: CGFloat = 20
         static let small: CGFloat = 14
     }
@@ -67,5 +74,21 @@ enum AppTheme {
         static let page: CGFloat = 16
         static let card: CGFloat = 14
         static let section: CGFloat = 18
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MARK: — Shared card outline
+//
+// The repeated `.overlay { Shape().stroke(outline(for:), lineWidth: 1.5) }`
+// pattern, factored into one modifier so every card/button applies the
+// exact same stroke instead of re-typing it at each call site.
+// ══════════════════════════════════════════════════════════════
+
+extension View {
+    func appOutline<S: Shape>(_ shape: S, colorScheme: ColorScheme, lineWidth: CGFloat = 1.5) -> some View {
+        overlay {
+            shape.stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: lineWidth)
+        }
     }
 }

@@ -4,12 +4,22 @@ import SwiftUI
 // ══════════════════════════════════════════════════════════════
 // MARK: — DevicePairingView
 //
-// Pair with the shared plant sensor over Bluetooth and hand it
-// Wi-Fi credentials. One device for every plant — this screen is
-// device setup, not per-plant setup, so it lives in Settings.
+// Pair with a plant sensor over Bluetooth and hand it Wi-Fi
+// credentials. Also doubles as the device picker for Add Plant —
+// when `onSelect` is set, tapping a device just reports it back
+// and dismisses instead of connecting, since linking a device to
+// a new plant doesn't need a live connection or Wi-Fi yet.
 // ══════════════════════════════════════════════════════════════
 
 struct DevicePairingView: View {
+
+    /// Devices already linked to another plant — hidden here so two
+    /// plants can't end up sharing one sensor.
+    var excludedDeviceIDs: Set<String> = []
+
+    /// When set, this becomes a picker: tapping a device reports the
+    /// pick and dismisses, skipping the connect/Wi-Fi flow below.
+    var onSelect: ((ESP32BLEManager.DiscoveredDevice) -> Void)? = nil
 
     @StateObject private var ble = ESP32BLEManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -17,16 +27,28 @@ struct DevicePairingView: View {
     @State private var ssid = ""
     @State private var password = ""
 
+    private var isSelectionMode: Bool { onSelect != nil }
+
+    private var visibleDevices: [ESP32BLEManager.DiscoveredDevice] {
+        ble.discoveredDevices.filter { !excludedDeviceIDs.contains($0.id.uuidString) }
+    }
+
     var body: some View {
         NavigationStack {
             AppBackground {
                 content
             }
-            .navigationTitle("Plant Sensor")
+            .navigationTitle(isSelectionMode ? "Select Device" : "Plant Sensor")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                if isSelectionMode {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                } else {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
         }
@@ -110,7 +132,7 @@ struct DevicePairingView: View {
 
     private var deviceList: some View {
         VStack(spacing: 20) {
-            if ble.discoveredDevices.isEmpty {
+            if visibleDevices.isEmpty {
                 Spacer()
                 ProgressView()
                 Text("Looking for your plant sensor…")
@@ -122,9 +144,13 @@ struct DevicePairingView: View {
                 Spacer()
                 Spacer()
             } else {
-                List(ble.discoveredDevices) { device in
+                List(visibleDevices) { device in
                     Button {
-                        ble.connect(to: device)
+                        if let onSelect {
+                            onSelect(device)
+                        } else {
+                            ble.connect(to: device)
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "sensor.fill")
@@ -214,7 +240,7 @@ struct DevicePairingView: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xlarge, style: .continuous)
                 .fill(AppTheme.Colors.lavenderPanel)
         )
         .padding(.horizontal, 24)
@@ -264,7 +290,7 @@ struct DevicePairingView: View {
             }
         }
         .padding()
-        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
     }
 
     private func readingMetric(_ title: String, value: String, icon: String) -> some View {
@@ -287,7 +313,7 @@ struct DevicePairingView: View {
             Spacer(minLength: 0)
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
     }
 
     // MARK: — Failure

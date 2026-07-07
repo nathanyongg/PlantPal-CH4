@@ -25,6 +25,12 @@ final class PlantProfile {
     var nickname: String         // e.g. "My living room plant"
     var addedAt: Date
 
+    // The one IoT sensor dedicated to this plant — each plant needs its
+    // own paired device, so this is what Add Plant enforces before the
+    // rest of the form can be filled in.
+    var linkedDeviceID: String?
+    var linkedDeviceName: String?
+
     // Gemini-fetched thresholds — stored so runtime is offline
     var minTemperatureC: Double   // °C
     var maxTemperatureC: Double
@@ -51,12 +57,16 @@ final class PlantProfile {
         name: String,
         nickname: String,
         thresholds: PlantThresholds,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        linkedDeviceID: String? = nil,
+        linkedDeviceName: String? = nil
     ) {
         self.name         = name
         self.nickname     = nickname
         self.addedAt      = Date()
         self.lastStatus   = "healthy"
+        self.linkedDeviceID   = linkedDeviceID
+        self.linkedDeviceName = linkedDeviceName
 
         self.minTemperatureC  = thresholds.minTemperatureC
         self.maxTemperatureC  = thresholds.maxTemperatureC

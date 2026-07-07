@@ -53,7 +53,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Device")
                 } footer: {
-                    Text("One sensor works for every plant. Pair it once, then move it next to whichever plant you want to check.")
+                    Text("Each plant gets its own sensor, so it can be checked automatically — no need to move anything between plants.")
                 }
 
                 Section {
@@ -95,6 +95,10 @@ struct SettingsView: View {
                         "Enable Notifications",
                         isOn: $notificationsEnabled
                     )
+                    .onChange(of: notificationsEnabled) { _, isOn in
+                        guard isOn else { return }
+                        Task { await PlantHealthMonitor.shared.requestNotificationAuthorization() }
+                    }
 
                     if notificationsEnabled {
 
