@@ -56,11 +56,8 @@ struct PlantCardView: View {
             }
         }
         .padding(12)
-        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 2)
-        }
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
+        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous), colorScheme: colorScheme, lineWidth: 2)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(plant.nickname), \(plant.name), \(statusText)")
@@ -90,7 +87,7 @@ struct PlantCardView: View {
             }
         }
         .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
     }
 
     // MARK: — Sensor badges

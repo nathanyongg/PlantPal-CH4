@@ -18,32 +18,87 @@ struct OnboardingView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
+    // 0 is the welcome splash; 1...pages.count map to pages[0...pages.count-1].
     @State private var currentPage = 0
 
     private let pages = OnboardingPage.all
 
-    private var page: OnboardingPage { pages[currentPage] }
+    private var page: OnboardingPage { pages[currentPage - 1] }
 
     var body: some View {
         ZStack {
             AppBackground { Color.clear }
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+            if currentPage == 0 {
+                welcomeScreen
+            } else {
+                VStack(spacing: 0) {
+                    header
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                mascotArea
-                    .padding(.horizontal, 24)
+                    mascotArea
+                        .padding(.horizontal, 24)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                bottomCard
+                    bottomCard
+                }
             }
         }
+    }
+
+    // MARK: — Welcome screen (first screen, no card chrome)
+
+    private var welcomeScreen: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 20)
+
+            Image("Mascot")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 260)
+                .accessibilityHidden(true)
+
+            Spacer(minLength: 32)
+
+            VStack(spacing: 8) {
+                Text("PlantPal")
+                    .font(.system(size: 40, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.Colors.onboardingAccent)
+
+                Text("Connecting you with your plant")
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+
+            Spacer(minLength: 32)
+
+            Button {
+                advance()
+            } label: {
+                Text("Get Started")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+            }
+            .background(AppTheme.Colors.onboardingAccent, in: Capsule())
+
+            pageDots(
+                activeColor: AppTheme.Colors.onboardingAccent,
+                inactiveColor: AppTheme.Colors.onboardingAccent.opacity(0.35),
+                activeIndex: 0
+            )
+                .padding(.top, 16)
+
+            Spacer(minLength: 20)
+        }
+        .padding(.horizontal, 32)
     }
 
     // MARK: — Header (persistent)
@@ -51,9 +106,9 @@ struct OnboardingView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             backButton
-                .opacity(currentPage > 0 ? 1 : 0)
-                .disabled(currentPage == 0)
-                .accessibilityHidden(currentPage == 0)
+                .opacity(currentPage > 1 ? 1 : 0)
+                .disabled(currentPage == 1)
+                .accessibilityHidden(currentPage == 1)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Welcome to")
@@ -70,23 +125,15 @@ struct OnboardingView: View {
     }
 
     private var backButton: some View {
-        Button {
+        IconCircleButton(
+            systemImage: "chevron.left",
+            accessibilityLabel: "Back to start",
+            accessibilityHint: "Returns to the first onboarding screen"
+        ) {
             withAnimation {
-                currentPage = 0
+                currentPage = 1
             }
-        } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-                .frame(width: 40, height: 40)
-                .background(AppTheme.Colors.surface, in: Circle())
-                .overlay {
-                    Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Back to start")
-        .accessibilityHint("Returns to the first onboarding screen")
     }
 
     // MARK: — Mascot (content swaps in place)
@@ -125,10 +172,7 @@ struct OnboardingView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-            }
+            .appOutline(RoundedRectangle(cornerRadius: 16), colorScheme: colorScheme)
             .fixedSize()
     }
 
@@ -163,9 +207,7 @@ struct OnboardingView: View {
                         .frame(height: 54)
                 }
                 .background(.white, in: Capsule())
-                .overlay {
-                    Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                }
+                .appOutline(Capsule(), colorScheme: colorScheme)
 
                 // Always present (never removed from the layout) so the
                 // card's height stays identical across all three pages —
@@ -181,46 +223,52 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                 }
-                .background(Color(red: 0x6B / 255, green: 0x8F / 255, blue: 0x52 / 255), in: Capsule())
-                .overlay {
-                    Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                }
+                .background(AppTheme.Colors.onboardingAccent, in: Capsule())
                 .opacity(isLastPage ? 0 : 1)
                 .disabled(isLastPage)
                 .accessibilityHidden(isLastPage)
             }
 
-            pageDots
+            pageDots(activeColor: .white, inactiveColor: .white.opacity(0.5), activeIndex: currentPage - 1)
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(24)
         .padding(.bottom, 40)
         .frame(maxWidth: .infinity)
         .background(
-            UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32, style: .continuous)
-                .fill(AppTheme.Colors.onboardingPanel)
-                .overlay(
-                    UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32, style: .continuous)
-                        .stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 2)
-                )
-                .ignoresSafeArea(edges: .bottom)
+            UnevenRoundedRectangle(
+                topLeadingRadius: AppTheme.Radius.xlarge,
+                topTrailingRadius: AppTheme.Radius.xlarge,
+                style: .continuous
+            )
+            .fill(AppTheme.Colors.onboardingPanel)
+            .appOutline(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: AppTheme.Radius.xlarge,
+                    topTrailingRadius: AppTheme.Radius.xlarge,
+                    style: .continuous
+                ),
+                colorScheme: colorScheme,
+                lineWidth: 2
+            )
+            .ignoresSafeArea(edges: .bottom)
         )
         .animation(.easeInOut(duration: 0.3), value: currentPage)
     }
 
-    private var pageDots: some View {
+    private func pageDots(activeColor: Color, inactiveColor: Color, activeIndex: Int) -> some View {
         HStack(spacing: 6) {
             ForEach(pages.indices, id: \.self) { index in
                 Capsule()
-                    .fill(.white.opacity(index == currentPage ? 1 : 0.5))
-                    .frame(width: index == currentPage ? 22 : 8, height: 8)
+                    .fill(index == activeIndex ? activeColor : inactiveColor)
+                    .frame(width: index == activeIndex ? 22 : 8, height: 8)
             }
         }
         .accessibilityHidden(true)
     }
 
     private var isLastPage: Bool {
-        currentPage == pages.count - 1
+        currentPage == pages.count
     }
 
     private func advance() {
@@ -246,7 +294,7 @@ private struct OnboardingPage {
 
     static let all: [OnboardingPage] = [
         OnboardingPage(
-            mascotImageName: "Mascot",
+            mascotImageName: "Mascot 2",
             speechBubble: nil,
             title: "Your houseplants\nhave feelings too.",
             subtitle: "Understand what your plants need through AI-powered conversations."

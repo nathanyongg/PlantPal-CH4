@@ -40,6 +40,14 @@ struct DashboardView: View {
     @State private var editingPlant: PlantProfile?
     @State private var showingSettings = false
     @State private var showingDevicePairing = false
+    @State private var showingConnectDevice = false
+    @State private var pendingDevice: ESP32BLEManager.DiscoveredDevice?
+
+    /// Devices already dedicated to an existing plant — each plant needs
+    /// its own sensor, so these are never offered again during pairing.
+    private var linkedDeviceIDs: Set<String> {
+        Set(plants.compactMap(\.linkedDeviceID))
+    }
 
     private var filteredPlants: [PlantProfile] {
 
@@ -77,7 +85,10 @@ struct DashboardView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $navigateToAddPlant) {
-                PlantSetupView()
+                PlantSetupView(
+                    preselectedDeviceID: pendingDevice?.id.uuidString,
+                    preselectedDeviceName: pendingDevice?.name
+                )
             }
             .navigationDestination(item: $selectedPlant) { plant in
                 PlantDetailView(profile: plant)
@@ -90,6 +101,17 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingDevicePairing) {
                 DevicePairingView()
+            }
+            .fullScreenCover(isPresented: $showingConnectDevice) {
+                ConnectDeviceView(
+                    excludedDeviceIDs: linkedDeviceIDs,
+                    onDeviceSelected: { device in
+                        pendingDevice = device
+                        showingConnectDevice = false
+                        navigateToAddPlant = true
+                    },
+                    onCancel: { showingConnectDevice = false }
+                )
             }
         }
     }
@@ -108,50 +130,21 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Button {
-                    navigateToAddPlant = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(AppTheme.Colors.surface, in: Circle())
-                        .overlay {
-                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                        }
+                IconCircleButton(systemImage: "plus", accessibilityLabel: "Add Plant") {
+                    pendingDevice = nil
+                    showingConnectDevice = true
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add Plant")
 
-                Button {
+                IconCircleButton(
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    accessibilityLabel: "Test Plant Sensor Pairing"
+                ) {
                     showingDevicePairing = true
-                } label: {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(AppTheme.Colors.surface, in: Circle())
-                        .overlay {
-                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                        }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Test Plant Sensor Pairing")
 
-                Button {
+                IconCircleButton(systemImage: "gearshape.fill", accessibilityLabel: "Settings") {
                     showingSettings = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(AppTheme.Colors.surface, in: Circle())
-                        .overlay {
-                            Circle().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-                        }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
             }
 
         }
@@ -183,9 +176,7 @@ struct DashboardView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(AppTheme.Colors.surface, in: Capsule())
-        .overlay {
-            Capsule().stroke(AppTheme.Colors.outline(for: colorScheme), lineWidth: 1.5)
-        }
+        .appOutline(Capsule(), colorScheme: colorScheme)
         .accessibilityElement(children: .combine)
     }
 
