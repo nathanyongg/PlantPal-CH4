@@ -2,38 +2,40 @@
 
 ## Introduction
 
-PlantPal is an IoT-powered plant monitoring system that helps users grow
-healthier plants by monitoring environmental conditions that directly
-influence **photosynthesis**. Instead of estimating overall plant health
-from images alone, PlantPal continuously measures the environmental
-factors that have the greatest impact on plant growth and provides
-timely recommendations when conditions move outside healthy ranges.
+PlantPal is an IoT-powered plant monitoring system designed to help
+users maintain healthy plants by monitoring the environmental conditions
+that directly influence **photosynthesis**. Instead of predicting plant
+health using machine learning alone, PlantPal continuously measures the
+most important environmental factors affecting plant growth and provides
+actionable recommendations when conditions fall outside suitable ranges.
 
-Our initial idea was to build PlantPal using a machine learning model to
-predict whether a plant was healthy or unhealthy from IoT sensor
-readings. After experimenting with the dataset, we found that it was
-unsuitable for training a reliable classifier because it was synthetic,
-imbalanced, and contained a pre-calculated `Health_Score` that
-effectively revealed the correct label. The model therefore learned to
-depend on this score instead of meaningful relationships between the
-sensor readings.
+Our initial idea was to build PlantPal with a machine learning model
+that predicts whether a plant is healthy or unhealthy from IoT sensor
+readings. After experimenting with the dataset, we found that it was not
+suitable for a reliable classifier because the dataset was
+**synthetic**, **imbalanced**, and contained a pre-calculated
+**Health_Score** that effectively revealed the correct answer. As a
+result, the model learned to rely on this score instead of identifying
+meaningful relationships between actual sensor readings.
 
-Rather than forcing a machine learning solution, we adopted a
+Instead of forcing the model into the application, we adopted a
 **rule-based monitoring approach**. Live sensor readings are compared
-against plant-specific environmental thresholds, providing transparent,
-explainable, and more reliable recommendations for the available data.
+against **species-specific environmental thresholds**, producing
+transparent and explainable recommendations based on measurable
+environmental conditions rather than unreliable predictions.
 
 ## Machine Learning Exploration
 
-We trained a Random Forest classifier using the provided dataset.
+We first trained a Random Forest model using the provided dataset.
 
   Result                 Value
   -------------------- -------
   Accuracy                100%
   Recall (Unhealthy)      1.00
 
-Although the results appeared excellent, feature importance analysis
-showed that almost every prediction depended on `Health_Score`.
+The result looked excellent, but feature importance showed that almost
+every prediction came from the `Health_Score` column instead of the real
+sensor values.
 
   Feature             Importance
   ----------------- ------------
@@ -45,10 +47,11 @@ showed that almost every prediction depended on `Health_Score`.
   Temperature               2.0%
   Humidity                  1.8%
 
-After removing `Health_Score`, healthy and unhealthy samples overlapped
-considerably.
+After removing this advantage, the remaining sensor readings were too
+similar between healthy and unhealthy plants for the model to reliably
+distinguish them.
 
-We also evaluated oversampling techniques.
+We also experimented with SMOTE to improve the imbalanced dataset.
 
   Method            Recall   False Alarms
   --------------- -------- --------------
@@ -57,132 +60,167 @@ We also evaluated oversampling techniques.
   SMOTE + Tomek       0.43             63
   SMOTE + ENN         0.46             82
 
-While recall improved, false alarms increased dramatically, making the
-model unsuitable for real-world notifications. Consequently, Core ML was
-not included in the final application.
+Although recall improved, the number of false alarms became too high.
+This would result in many incorrect notifications being sent to users,
+reducing confidence in the application. Because of this trade-off, we
+decided not to use the Core ML model.
 
 ## IoT Sensor Selection
 
-PlantPal monitors the environmental conditions that most directly affect
-photosynthesis.
+PlantPal focuses on monitoring the environmental conditions that have
+the greatest impact on photosynthesis.
 
   -----------------------------------------------------------------------
-  Sensor                  Purpose                 Impact
+  Sensor                  Purpose                 Importance to
+                                                  Photosynthesis
   ----------------------- ----------------------- -----------------------
-  KY-018 Photoresistor    Measure ambient light   Light provides the
-                          intensity               energy required for
-                                                  photosynthesis.
+  KY-018 Photoresistor    Measures ambient light  Light is the primary
+                          intensity               energy source required
+                                                  for photosynthesis.
 
-  DHT11                   Measure air temperature Temperature influences
-                          and humidity            photosynthetic enzymes
-                                                  while humidity affects
+  DHT11                   Measures air            Temperature affects
+                          temperature and         photosynthetic enzyme
+                          humidity                activity while humidity
+                                                  influences
                                                   transpiration.
 
-  YL-69                   Measure soil moisture   Water is essential for
-                                                  photosynthesis and
+  YL-69 Soil Moisture     Measures soil water     Water is a key input
+  Sensor                  content                 for photosynthesis and
                                                   healthy root function.
 
-  DS1302 RTC              Timestamp readings      Enables historical
-                                                  tracking and scheduled
+  DS1302 RTC              Provides accurate date  Records timestamps for
+                          and time                sensor readings and
+                                                  enables scheduled
                                                   sampling every 15
                                                   minutes.
   -----------------------------------------------------------------------
 
-These sensors were selected because they provide the highest impact on
-photosynthesis while keeping the hardware affordable and compact.
+These sensors were selected because they monitor the environmental
+factors with the greatest influence on photosynthesis while keeping the
+hardware compact and cost-effective.
 
 ## Hardware Design Considerations
 
-Correct sensor placement is essential for accurate measurements.
+Proper sensor placement is essential for obtaining accurate
+environmental measurements.
 
--   The KY-018 should face the surrounding environment and not be
-    covered by leaves, otherwise light readings may be underestimated.
--   The DHT11 should be positioned away from leaves and the soil surface
-    to measure ambient air rather than localised humidity.
--   The YL-69 should be inserted near the root zone while avoiding
-    direct contact with the main stem.
--   The enclosure should provide enough spacing between sensors to
-    minimise interference while remaining compact.
+-   The **KY-018 photoresistor** should face the surrounding environment
+    and not be covered by leaves. Otherwise, light readings may be lower
+    than the light actually reaching the plant.
+-   The **DHT11** should be positioned slightly away from the plant
+    canopy and soil surface to measure ambient air temperature and
+    humidity.
+-   The **YL-69** should be inserted near the plant's root zone while
+    avoiding direct contact with the stem.
+-   Sensors should be spaced appropriately within the enclosure to
+    minimise interference while maintaining a compact form factor.
 
 ## Architecture Changes
 
-The original prototype used Bluetooth communication between the ESP32
-and iPhone, limiting monitoring to Bluetooth range.
+Originally, the ESP32 communicated directly with the iPhone using
+Bluetooth, limiting communication to nearby devices.
 
-The final architecture uses Wi-Fi. Each plant has its own dedicated
-ESP32 device that uploads sensor readings to a cloud endpoint every 15
-minutes. The iPhone retrieves the latest readings over the internet,
-enabling continuous remote monitoring for multiple plants.
+The final architecture uses Wi-Fi instead. Each plant is equipped with
+its own dedicated ESP32 monitoring device. Every ESP32 uploads sensor
+readings to a cloud endpoint every 15 minutes, while the iPhone
+retrieves the latest data through the internet, allowing users to
+remotely monitor multiple plants simultaneously.
 
-Bluetooth is only used during initial setup to provision Wi-Fi
-credentials securely.
+Bluetooth is still used during the initial setup process to securely
+provision Wi-Fi credentials from the iPhone to the ESP32.
 
 ## Final Solution
 
-PlantPal compares live sensor readings against plant-specific
-environmental thresholds instead of relying on machine learning
-predictions.
+Instead of machine learning, PlantPal compares incoming sensor readings
+against **species-specific environmental thresholds**.
 
 When adding a plant, the user enters its **species name**. The more
-specific the species (for example, *Monstera deliciosa* instead of
-simply *Monstera*), the more accurately Gemini can generate recommended
-threshold ranges for:
+specific the species name (for example, *Monstera deliciosa* rather than
+simply *Monstera*), the more accurately Gemini can generate suitable
+environmental thresholds.
+
+Gemini generates recommended ranges for:
 
 -   Temperature
 -   Humidity
 -   Soil moisture
 -   Light intensity
 
-These thresholds are stored locally using SwiftData.
+These thresholds are stored locally in SwiftData.
 
-Each plant is paired with its own ESP32 device containing a KY-018,
-DHT11, YL-69 and DS1302 RTC. The ESP32 uploads readings every 15
-minutes, and the iPhone compares them against the stored thresholds.
+Each plant is paired with its own ESP32 device equipped with the KY-018,
+DHT11, YL-69 and DS1302 sensors. Sensor readings are uploaded every 15
+minutes and compared against the stored thresholds.
 
-If readings fall outside the recommended ranges, Apple's Foundation
-Model generates a concise explanation and suggested actions.
-Notifications are delivered locally, while the app also supports Dynamic
-Type, VoiceOver and spoken announcements using AVFoundation.
+If readings fall outside the safe range, Apple's Foundation Model
+generates a concise explanation and suggested actions that are displayed
+through local notifications.
+
+PlantPal also supports Dynamic Type, VoiceOver and spoken announcements
+through AVFoundation, making the application accessible to users with
+visual impairments.
 
 ## Frameworks Used
 
-  Framework           Purpose
-  ------------------- ------------------------------------------------------
-  SwiftUI             User interface
-  SwiftData           Store plant profiles, thresholds and latest readings
-  FoundationModels    Generate natural-language explanations
-  PhotosUI            Select plant images
-  CoreBluetooth       ESP32 Wi-Fi provisioning
-  AVFoundation        Speech synthesis
-  BackgroundTasks     Background monitoring
-  UserNotifications   Local notifications
-  URLSession          Cloud communication and Gemini requests
+  -----------------------------------------------------------------------
+  Framework               Core Feature            Purpose in PlantPal
+  ----------------------- ----------------------- -----------------------
+  SwiftUI                 Declarative UI          Build the application's
+                                                  interface
+
+  SwiftData               Local persistence       Store plant profiles,
+                                                  thresholds and latest
+                                                  sensor status
+
+  FoundationModels        On-device language      Generate
+                          model                   natural-language
+                                                  explanations for alerts
+
+  PhotosUI                Photo Picker            Allow users to choose
+                                                  plant images
+
+  CoreBluetooth           BLE communication       Initial ESP32 Wi-Fi
+                                                  provisioning
+
+  AVFoundation            Speech synthesis        Read important updates
+                                                  aloud for accessibility
+
+  BackgroundTasks         Background execution    Periodically check
+                                                  plant status
+
+  UserNotifications       Local notifications     Notify users when a
+                                                  plant needs attention
+
+  URLSession              HTTP networking         Retrieve sensor data
+                                                  and communicate with
+                                                  Gemini and cloud
+                                                  services
+  -----------------------------------------------------------------------
 
 ## Limitations
 
--   The dataset is synthetic and unsuitable for training a
-    production-quality classifier.
--   ESP32 supports **2.4 GHz Wi-Fi only** and cannot connect to 5
-    GHz-only networks.
--   iOS Background Tasks cannot execute at guaranteed intervals.
--   The YL-69 sensor may corrode over time and require replacement or
-    calibration.
--   Incorrect sensor placement, particularly blocked light sensors, can
-    reduce measurement accuracy.
--   The current cloud endpoint is a placeholder and should be replaced
-    with a secure production backend.
--   Additional long-term real-world data would improve future threshold
-    validation and machine learning research.
+-   The dataset is synthetic and therefore unsuitable for training a
+    production-quality machine learning classifier.
+-   The ESP32 supports **2.4 GHz Wi-Fi only** and cannot connect to 5
+    GHz-only wireless networks.
+-   Background Tasks on iOS do not execute at fixed intervals.
+-   The YL-69 soil moisture sensor may corrode over time and require
+    periodic calibration or replacement.
+-   Incorrect sensor placement (such as leaves blocking the
+    photoresistor) can reduce measurement accuracy.
+-   A production deployment would require a secure cloud backend and
+    long-term real-world sensor data for validation.
 
 ## Conclusion
 
-Although Core ML was ultimately excluded, the machine learning
-investigation highlighted the limitations of the available dataset and
-guided the project toward a more reliable solution.
+Although Core ML was not used in the final application, the
+experimentation highlighted the limitations of the available dataset and
+demonstrated that a rule-based monitoring approach was more suitable.
 
-PlantPal combines dedicated ESP32 IoT devices, environmental sensing,
-cloud connectivity, Gemini-generated species-specific thresholds, and
-Apple's Foundation Model to help users maintain the conditions required
-for effective photosynthesis. By focusing on measurable environmental
-factors instead of unreliable predictions, PlantPal delivers
-transparent, practical, and extensible plant health monitoring.
+The final application combines ESP32 IoT devices, environmental sensors,
+Wi-Fi communication, Gemini-generated species-specific thresholds and
+Apple's Foundation Model to help users maintain the environmental
+conditions required for effective photosynthesis. By focusing on
+measurable environmental factors rather than unreliable predictions,
+PlantPal provides a transparent, reliable and extensible plant
+monitoring solution.
