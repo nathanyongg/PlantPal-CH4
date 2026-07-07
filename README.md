@@ -28,24 +28,13 @@ environmental conditions rather than unreliable predictions.
 
 We first trained a Random Forest model using the provided dataset.
 
-  Result                 Value
-  -------------------- -------
-  Accuracy                100%
-  Recall (Unhealthy)      1.00
+| Result | Value | | --- | --- | | Accuracy | 100% | | Recall (Unhealthy) | 1.00 |
 
 The result looked excellent, but feature importance showed that almost
 every prediction came from the `Health_Score` column instead of the real
 sensor values.
 
-  Feature             Importance
-  ----------------- ------------
-  Health_Score             87.5%
-  Light Intensity           2.3%
-  Nutrient Level            2.2%
-  Soil Moisture             2.1%
-  Soil pH                   2.0%
-  Temperature               2.0%
-  Humidity                  1.8%
+| Feature | Importance | | --- | --- | | Health_Score | 87.5% | | Light Intensity | 2.3% | | Nutrient Level | 2.2% | | Soil Moisture | 2.1% | | Soil pH | 2.0% | | Temperature | 2.0% | | Humidity | 1.8% |
 
 After removing this advantage, the remaining sensor readings were too
 similar between healthy and unhealthy plants for the model to reliably
@@ -53,12 +42,7 @@ distinguish them.
 
 We also experimented with SMOTE to improve the imbalanced dataset.
 
-  Method            Recall   False Alarms
-  --------------- -------- --------------
-  Baseline            0.03              3
-  SMOTE               0.46             62
-  SMOTE + Tomek       0.43             63
-  SMOTE + ENN         0.46             82
+| Method | Recall | False Alarms | | --- | --- | --- | | Baseline | 0.03 | 3 | | SMOTE | 0.46 | 62 | | SMOTE + Tomek | 0.43 | 63 | | SMOTE + ENN | 0.46 | 82 |
 
 Although recall improved, the number of false alarms became too high.
 This would result in many incorrect notifications being sent to users,
