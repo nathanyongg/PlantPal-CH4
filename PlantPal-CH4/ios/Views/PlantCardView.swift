@@ -123,7 +123,7 @@ struct PlantCardView: View {
 
     private var lightText: String {
         guard plant.hasBeenChecked, let value = plant.lastLightLux else { return "--" }
-        return "\(Int(value)) lx"
+        return "\(Int(value))%"
     }
 
     private var temperatureText: String {

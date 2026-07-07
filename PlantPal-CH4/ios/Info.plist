@@ -10,6 +10,13 @@
 	<string></string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

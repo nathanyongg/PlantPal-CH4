@@ -24,7 +24,6 @@ final class PlantHealthMonitor {
 
     static let shared = PlantHealthMonitor()
 
-    private let dataService = PlantDataService()
     private let detector    = PlantHealthDetector()
     private let explainer   = PlantExplainer()
 
@@ -50,7 +49,7 @@ final class PlantHealthMonitor {
     ) async {
         let reading: SensorReading
         do {
-            reading = try await dataService.fetchLatestReading()
+            reading = try await PlantDataService(profile: profile).fetchLatestReading()
         } catch {
             if notifyIfUnhealthy {
                 await handleStaleData(error: error)

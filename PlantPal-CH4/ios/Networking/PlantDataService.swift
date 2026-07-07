@@ -3,12 +3,10 @@ import Foundation
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantDataService
 //
-// Replaces BLEManager. The ESP32 publishes readings to a cloud
-// endpoint on its own schedule — this service just fetches the
-// latest one whenever the iPhone wants it (app open, background
-// refresh, or manual pull-to-refresh).
-//
-// No proximity required. Works from anywhere with internet.
+// Fetches readings from the ESP32 after BLE Wi-Fi provisioning.
+// The phone discovers the ESP32's local HTTP base URL during pairing,
+// stores it on PlantProfile, then calls /latest whenever it needs a
+// reading. The iPhone and ESP32 must be on the same local network.
 // ══════════════════════════════════════════════════════════════
 
 @MainActor
@@ -16,18 +14,19 @@ final class PlantDataService {
 
     private let session: URLSession
     private let baseURL: URL
-    private let apiKey: String
+    private let apiKey: String?
 
     init(
-        baseURL: URL = URL(string: "https://your-worker.example.workers.dev")!,
-        apiKey: String = "REPLACE_WITH_YOUR_API_KEY"
+        baseURL: URL,
+        apiKey: String? = nil
     ) {
         self.baseURL = baseURL
         self.apiKey = apiKey
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15
-        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = 6
+        config.timeoutIntervalForResource = 6
+        config.waitsForConnectivity = false
         self.session = URLSession(configuration: config)
     }
 
@@ -36,7 +35,9 @@ final class PlantDataService {
     func fetchLatestReading() async throws -> SensorReading {
         var request = URLRequest(url: baseURL.appendingPathComponent("latest"))
         request.httpMethod = "GET"
-        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let apiKey {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
 
         let (data, response) = try await session.data(for: request)
 
@@ -66,7 +67,9 @@ final class PlantDataService {
         components.queryItems = [URLQueryItem(name: "hours", value: "\(hours)")]
 
         var request = URLRequest(url: components.url!)
-        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let apiKey {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
 
         let (data, response) = try await session.data(for: request)
 
@@ -94,11 +97,26 @@ final class PlantDataService {
     }
 }
 
+extension PlantDataService {
+
+    convenience init(profile: PlantProfile) throws {
+        guard
+            let rawURL = profile.sensorBaseURL,
+            let url = URL(string: rawURL)
+        else {
+            throw PlantDataServiceError.sensorNotConfigured
+        }
+
+        self.init(baseURL: url)
+    }
+}
+
 // ══════════════════════════════════════════════════════════════
 // MARK: — Errors
 // ══════════════════════════════════════════════════════════════
 
 enum PlantDataServiceError: LocalizedError {
+    case sensorNotConfigured
     case invalidResponse
     case noReadingsYet
     case unauthorized
@@ -106,6 +124,8 @@ enum PlantDataServiceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .sensorNotConfigured:
+            return "This plant doesn't have a provisioned Wi-Fi sensor yet."
         case .invalidResponse:
             return "Couldn't reach the plant sensor service."
         case .noReadingsYet:

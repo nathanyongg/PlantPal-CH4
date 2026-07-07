@@ -43,12 +43,19 @@ final class ESP32BLEManager: NSObject, ObservableObject {
         }
     }
 
+    struct ProvisionedDevice: Identifiable, Equatable {
+        let id: UUID
+        let name: String
+        let baseURL: URL
+    }
+
     @Published private(set) var bluetoothState: CBManagerState = .unknown
     @Published private(set) var discoveredDevices: [DiscoveredDevice] = []
     @Published private(set) var phase: ConnectionPhase = .disconnected
     @Published private(set) var connectedDeviceName: String?
     @Published private(set) var latestReading: SensorReading?
     @Published private(set) var latestReadingError: String?
+    @Published private(set) var provisionedBaseURL: URL?
 
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
@@ -56,6 +63,10 @@ final class ESP32BLEManager: NSObject, ObservableObject {
     private var credentialsCharacteristic: CBCharacteristic?
     private var statusCharacteristic: CBCharacteristic?
     private var sensorReadingCharacteristic: CBCharacteristic?
+    private var networkInfoCharacteristic: CBCharacteristic?
+    private var shouldStartScanningWhenPoweredOn = false
+    private var provisioningTimeoutTask: Task<Void, Never>?
+    private var provisioningPollTask: Task<Void, Never>?
 
     private static let pairedDeviceKey = "pairedESP32DeviceIdentifier"
 
@@ -69,6 +80,7 @@ final class ESP32BLEManager: NSObject, ObservableObject {
     }
 
     var hasPairedDevice: Bool { pairedDeviceIdentifier != nil }
+    var connectedPeripheralIdentifier: UUID? { connectedPeripheral?.identifier }
 
     private override init() {
         super.init()
@@ -79,15 +91,27 @@ final class ESP32BLEManager: NSObject, ObservableObject {
 
     func startScanning() {
         discoveredDevices = []
-        guard bluetoothState == .poweredOn else { return }
+        guard bluetoothState == .poweredOn else {
+            shouldStartScanningWhenPoweredOn = true
+            phase = bluetoothState == .unknown || bluetoothState == .resetting
+                ? .scanning
+                : .failed(bluetoothUnavailableMessage)
+            return
+        }
+        shouldStartScanningWhenPoweredOn = false
         phase = .scanning
         central.scanForPeripherals(
-            withServices: [BLEProtocol.serviceUUID],
+            withServices: nil,
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
     }
 
     func stopScanning() {
+        shouldStartScanningWhenPoweredOn = false
+        guard bluetoothState == .poweredOn else {
+            if phase == .scanning { phase = .disconnected }
+            return
+        }
         central.stopScan()
         if phase == .scanning { phase = .disconnected }
     }
@@ -95,6 +119,10 @@ final class ESP32BLEManager: NSObject, ObservableObject {
     // MARK: — Connecting
 
     func connect(to device: DiscoveredDevice) {
+        guard bluetoothState == .poweredOn else {
+            phase = .failed(bluetoothUnavailableMessage)
+            return
+        }
         guard let peripheral = peripherals[device.id] else { return }
         stopScanning()
         phase = .connecting
@@ -141,21 +169,81 @@ final class ESP32BLEManager: NSObject, ObservableObject {
         do {
             let payload = try BLEProtocol.WiFiCredentials(ssid: ssid, password: password).encoded()
             phase = .sendingCredentials
+            startProvisioningTimeout()
             peripheral.writeValue(payload, for: characteristic, type: .withResponse)
         } catch {
             phase = .failed("Couldn't prepare Wi-Fi credentials: \(error.localizedDescription)")
         }
     }
 
+    func cancelProvisioning() {
+        cancelProvisioningTasks()
+        phase = .readyToProvision
+    }
+
     // MARK: — Private
 
     private func resetConnectionState() {
+        cancelProvisioningTasks()
         connectedPeripheral = nil
         credentialsCharacteristic = nil
         statusCharacteristic = nil
         sensorReadingCharacteristic = nil
+        networkInfoCharacteristic = nil
         connectedDeviceName = nil
+        provisionedBaseURL = nil
         phase = .disconnected
+    }
+
+    private func cancelProvisioningTasks() {
+        provisioningTimeoutTask?.cancel()
+        provisioningTimeoutTask = nil
+        provisioningPollTask?.cancel()
+        provisioningPollTask = nil
+    }
+
+    private func startProvisioningTimeout() {
+        provisioningTimeoutTask?.cancel()
+
+        provisioningTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            if self.phase == .sendingCredentials || self.phase == .awaitingResult {
+                self.phase = .failed("The sensor took too long to join Wi-Fi. Check that the network is 2.4 GHz, the password is correct, and the sensor is still powered on.")
+            }
+        }
+    }
+
+    private func finishProvisioning() {
+        cancelProvisioningTasks()
+        phase = .provisioned
+    }
+
+    private func startProvisioningPolling(peripheral: CBPeripheral) {
+        provisioningPollTask?.cancel()
+
+        provisioningPollTask = Task { @MainActor [weak self, weak peripheral] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                guard
+                    let self,
+                    let peripheral,
+                    self.phase == .sendingCredentials || self.phase == .awaitingResult
+                else { return }
+
+                if let statusCharacteristic = self.statusCharacteristic,
+                   statusCharacteristic.properties.contains(.read) {
+                    peripheral.readValue(for: statusCharacteristic)
+                }
+
+                if let networkInfoCharacteristic = self.networkInfoCharacteristic,
+                   networkInfoCharacteristic.properties.contains(.read) {
+                    peripheral.readValue(for: networkInfoCharacteristic)
+                }
+            }
+        }
     }
 
     private func handleSensorReadingData(_ data: Data) {
@@ -164,6 +252,23 @@ final class ESP32BLEManager: NSObject, ObservableObject {
             latestReadingError = nil
         } catch {
             latestReadingError = "Couldn't decode BLE reading: \(error.localizedDescription)"
+        }
+    }
+
+    private var bluetoothUnavailableMessage: String {
+        switch bluetoothState {
+        case .poweredOff:
+            return "Bluetooth is turned off. Turn it on to connect to the plant sensor."
+        case .unauthorized:
+            return "Bluetooth permission is needed to connect to the plant sensor."
+        case .unsupported:
+            return "This device doesn't support Bluetooth Low Energy."
+        case .resetting, .unknown:
+            return "Bluetooth is still getting ready. Try again in a moment."
+        case .poweredOn:
+            return ""
+        @unknown default:
+            return "Bluetooth isn't available right now."
         }
     }
 }
@@ -175,6 +280,10 @@ extension ESP32BLEManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         bluetoothState = central.state
         if central.state == .poweredOn {
+            if shouldStartScanningWhenPoweredOn {
+                startScanning()
+                return
+            }
             reconnectToPairedDevice()
         }
     }
@@ -185,12 +294,18 @@ extension ESP32BLEManager: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
+        let advertisedServices = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
         peripherals[peripheral.identifier] = peripheral
-        let name = peripheral.name
+        let advertisedName = peripheral.name
             ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String
-            ?? "Plant Sensor"
 
-        let device = DiscoveredDevice(id: peripheral.identifier, name: name, rssi: RSSI.intValue)
+        guard
+            advertisedServices.contains(BLEProtocol.serviceUUID)
+                || advertisedName?.localizedCaseInsensitiveContains("PlantPal") == true
+                || advertisedName?.localizedCaseInsensitiveContains("Plant Sensor") == true
+        else { return }
+
+        let device = DiscoveredDevice(id: peripheral.identifier, name: advertisedName ?? "Plant Sensor", rssi: RSSI.intValue)
         if let index = discoveredDevices.firstIndex(where: { $0.id == device.id }) {
             discoveredDevices[index] = device
         } else {
@@ -235,7 +350,8 @@ extension ESP32BLEManager: CBPeripheralDelegate {
                 [
                     BLEProtocol.wifiCredentialsCharacteristicUUID,
                     BLEProtocol.provisioningStatusCharacteristicUUID,
-                    BLEProtocol.sensorReadingCharacteristicUUID
+                    BLEProtocol.sensorReadingCharacteristicUUID,
+                    BLEProtocol.networkInfoCharacteristicUUID
                 ],
                 for: service
             )
@@ -270,6 +386,15 @@ extension ESP32BLEManager: CBPeripheralDelegate {
                     peripheral.readValue(for: characteristic)
                 }
 
+            case BLEProtocol.networkInfoCharacteristicUUID:
+                networkInfoCharacteristic = characteristic
+                if characteristic.properties.contains(.notify) {
+                    peripheral.setNotifyValue(true, for: characteristic)
+                }
+                if characteristic.properties.contains(.read) {
+                    peripheral.readValue(for: characteristic)
+                }
+
             default:
                 break
             }
@@ -288,9 +413,11 @@ extension ESP32BLEManager: CBPeripheralDelegate {
     ) {
         guard characteristic.uuid == BLEProtocol.wifiCredentialsCharacteristicUUID else { return }
         if let error {
+            cancelProvisioningTasks()
             phase = .failed("Couldn't send Wi-Fi credentials: \(error.localizedDescription)")
         } else {
             phase = .awaitingResult
+            startProvisioningPolling(peripheral: peripheral)
         }
     }
 
@@ -302,6 +429,21 @@ extension ESP32BLEManager: CBPeripheralDelegate {
         if characteristic.uuid == BLEProtocol.sensorReadingCharacteristicUUID {
             guard error == nil, let data = characteristic.value else { return }
             handleSensorReadingData(data)
+            return
+        }
+
+        if characteristic.uuid == BLEProtocol.networkInfoCharacteristicUUID {
+            guard error == nil, let data = characteristic.value else { return }
+            do {
+                let networkInfo = try JSONDecoder().decode(BLEProtocol.NetworkInfo.self, from: data)
+                provisionedBaseURL = networkInfo.baseURL
+                if phase == .sendingCredentials || phase == .awaitingResult {
+                    finishProvisioning()
+                }
+            } catch {
+                cancelProvisioningTasks()
+                phase = .failed("Couldn't read the sensor's Wi-Fi address: \(error.localizedDescription)")
+            }
             return
         }
 
@@ -318,8 +460,12 @@ extension ESP32BLEManager: CBPeripheralDelegate {
         case .connecting:
             phase = .awaitingResult
         case .connected:
-            phase = .provisioned
+            if let networkInfoCharacteristic, networkInfoCharacteristic.properties.contains(.read) {
+                peripheral.readValue(for: networkInfoCharacteristic)
+            }
+            finishProvisioning()
         case .failed:
+            cancelProvisioningTasks()
             phase = .failed("The sensor couldn't join that Wi-Fi network. Check the password and try again.")
         }
     }

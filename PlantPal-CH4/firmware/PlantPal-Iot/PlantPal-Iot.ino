@@ -8,15 +8,16 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-#define DHT_PIN 4
+// ESP32-C3 Super Mini wiring
+#define DHT_PIN 3
 #define DHT_TYPE DHT11
 
-#define SOIL_PIN 34
-#define LIGHT_PIN 35
+#define SOIL_PIN 0      // YL-69 AO
+#define LIGHT_PIN 1     // KY-018 S/AO
 
-#define DS1302_CLK 18
-#define DS1302_DAT 19
-#define DS1302_RST 5
+#define DS1302_CLK 4
+#define DS1302_DAT 5
+#define DS1302_RST 6
 
 // ESP32 Access Point Wi-Fi
 const char* apSSID = "PlantMonitor";
@@ -27,6 +28,7 @@ const char* apPassword = "12345678";
 #define WIFI_CREDENTIALS_CHAR_UUID "7E570002-0000-1000-8000-00805F9B34FB"
 #define PROVISIONING_STATUS_CHAR_UUID "7E570003-0000-1000-8000-00805F9B34FB"
 #define SENSOR_READING_CHAR_UUID "7E570004-0000-1000-8000-00805F9B34FB"
+#define NETWORK_INFO_CHAR_UUID "7E570005-0000-1000-8000-00805F9B34FB"
 
 #define PROVISIONING_IDLE 0
 #define PROVISIONING_CONNECTING 1
@@ -37,6 +39,7 @@ const char* apPassword = "12345678";
 WebServer server(80);
 BLECharacteristic* provisioningStatusCharacteristic = nullptr;
 BLECharacteristic* sensorReadingCharacteristic = nullptr;
+BLECharacteristic* networkInfoCharacteristic = nullptr;
 bool bleClientConnected = false;
 unsigned long lastBleReadingSentAt = 0;
 
@@ -56,9 +59,11 @@ RtcDS1302<ThreeWire> rtc(myWire);
 void setupBLE();
 void setProvisioningStatus(uint8_t status);
 void sendSensorReadingOverBLE();
+void sendNetworkInfoOverBLE();
 void connectToWiFi(const String& ssid, const String& password);
 String extractJsonString(const String& json, const String& key);
 String getSensorReadingJson();
+String getNetworkInfoJson();
 String getISODateTimeString(const RtcDateTime& dt);
 
 class PlantPalServerCallbacks : public BLEServerCallbacks {
@@ -70,7 +75,7 @@ class PlantPalServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* server) {
     bleClientConnected = false;
     Serial.println("BLE client disconnected; restarting advertising");
-    BLEDevice::startAdvertising();
+    BLEDevice::getAdvertising()->start();
   }
 };
 
@@ -98,7 +103,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Serial.println("Starting ESP32 PlantPal sensor system...");
+  Serial.println("Starting PlantPal on ESP32-C3 Super Mini...");
 
   // Start ESP32 as Wi-Fi Access Point
   WiFi.mode(WIFI_AP_STA);
@@ -130,8 +135,10 @@ void setup() {
     rtc.SetIsRunning(true);
   }
 
-  // After first successful upload, you can comment this out
-  rtc.SetDateTime(compiled);
+  // Sets the DS1302 to the upload computer's current Bali/WITA time.
+  // After one successful upload, comment this out so every reboot does
+  // not reset the RTC back to the old compile time.
+  // rtc.SetDateTime(compiled);
 
   setupBLE();
 
@@ -140,6 +147,7 @@ void setup() {
 
   // JSON API route
   server.on("/data", handleData);
+  server.on("/latest", handleData);
 
   server.begin();
   Serial.println("Web server started");
@@ -158,6 +166,7 @@ void loop() {
 
 void setupBLE() {
   BLEDevice::init("PlantPal Sensor");
+  BLEDevice::setMTU(185);
 
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(new PlantPalServerCallbacks());
@@ -184,6 +193,13 @@ void setupBLE() {
   sensorReadingCharacteristic->addDescriptor(new BLE2902());
   sensorReadingCharacteristic->setValue(getSensorReadingJson().c_str());
 
+  networkInfoCharacteristic = service->createCharacteristic(
+    NETWORK_INFO_CHAR_UUID,
+    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+  );
+  networkInfoCharacteristic->addDescriptor(new BLE2902());
+  networkInfoCharacteristic->setValue(getNetworkInfoJson().c_str());
+
   service->start();
 
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
@@ -192,7 +208,7 @@ void setupBLE() {
   advertising->setMinPreferred(0x06);
   advertising->setMinPreferred(0x12);
 
-  BLEDevice::startAdvertising();
+  advertising->start();
   Serial.println("BLE advertising started as PlantPal Sensor");
   Serial.print("BLE service UUID: ");
   Serial.println(PLANTPAL_SERVICE_UUID);
@@ -204,7 +220,9 @@ void setProvisioningStatus(uint8_t status) {
   }
 
   provisioningStatusCharacteristic->setValue(&status, 1);
-  provisioningStatusCharacteristic->notify();
+  if (bleClientConnected) {
+    provisioningStatusCharacteristic->notify();
+  }
 }
 
 void sendSensorReadingOverBLE() {
@@ -220,11 +238,28 @@ void sendSensorReadingOverBLE() {
   Serial.println(json);
 }
 
+void sendNetworkInfoOverBLE() {
+  if (networkInfoCharacteristic == nullptr) {
+    return;
+  }
+
+  String json = getNetworkInfoJson();
+  networkInfoCharacteristic->setValue(json.c_str());
+  if (bleClientConnected) {
+    networkInfoCharacteristic->notify();
+  }
+
+  Serial.print("Sent BLE network info: ");
+  Serial.println(json);
+}
+
 void connectToWiFi(const String& ssid, const String& password) {
   Serial.print("Connecting to Wi-Fi SSID: ");
   Serial.println(ssid);
   setProvisioningStatus(PROVISIONING_CONNECTING);
 
+  WiFi.disconnect(false, false);
+  delay(100);
   WiFi.begin(ssid.c_str(), password.c_str());
 
   unsigned long startedAt = millis();
@@ -238,12 +273,26 @@ void connectToWiFi(const String& ssid, const String& password) {
     Serial.println("Wi-Fi connected!");
     Serial.print("Station IP address: ");
     Serial.println(WiFi.localIP());
+    sendNetworkInfoOverBLE();
     setProvisioningStatus(PROVISIONING_CONNECTED);
   } else {
     Serial.println("Wi-Fi connection failed");
     WiFi.disconnect(false);
     setProvisioningStatus(PROVISIONING_FAILED);
   }
+}
+
+String getNetworkInfoJson() {
+  IPAddress ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP() : WiFi.softAPIP();
+  String baseURL = "http://" + ip.toString();
+
+  String json = "{";
+  json += "\"ip\":\"" + ip.toString() + "\",";
+  json += "\"base_url\":\"" + baseURL + "\",";
+  json += "\"data_url\":\"" + baseURL + "/latest\"";
+  json += "}";
+
+  return json;
 }
 
 String extractJsonString(const String& json, const String& key) {
@@ -379,6 +428,9 @@ String getSensorReadingJson() {
   int soilPercent = map(soilValue, DRY_SOIL, WET_SOIL, 0, 100);
   soilPercent = constrain(soilPercent, 0, 100);
 
+  int lightPercent = map(lightValue, BRIGHT_LIGHT, DARK_LIGHT, 100, 0);
+  lightPercent = constrain(lightPercent, 0, 100);
+
   RtcDateTime now = rtc.GetDateTime();
 
   String json = "{";
@@ -386,7 +438,7 @@ String getSensorReadingJson() {
   json += "\"t\":" + String(temperature, 1) + ",";
   json += "\"h\":" + String(humidity, 1) + ",";
   json += "\"m\":" + String(soilPercent) + ",";
-  json += "\"l\":" + String(lightValue);
+  json += "\"l\":" + String(lightPercent);
   json += "}";
 
   return json;
@@ -411,12 +463,12 @@ String getDateTimeString(const RtcDateTime& dt) {
 }
 
 String getISODateTimeString(const RtcDateTime& dt) {
-  char datestring[25];
+  char datestring[32];
 
   snprintf_P(
     datestring,
     sizeof(datestring),
-    PSTR("%04u-%02u-%02uT%02u:%02u:%02uZ"),
+    PSTR("%04u-%02u-%02uT%02u:%02u:%02u+08:00"),
     dt.Year(),
     dt.Month(),
     dt.Day(),

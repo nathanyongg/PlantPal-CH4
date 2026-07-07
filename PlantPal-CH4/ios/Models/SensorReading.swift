@@ -3,10 +3,9 @@ import Foundation
 // ══════════════════════════════════════════════════════════════
 // MARK: — SensorReading
 //
-// All values are in human-readable units — °C, %, lux.
-// Raw ADC conversion happens in the wire decoder below so
-// everything downstream (detector, FM prompt, UI) works in
-// the same units that Gemini's thresholds use.
+// All values are in human-readable units — °C and %.
+// The ESP32 maps raw soil and light ADC readings to 0-100 before
+// sending them, so everything downstream works in display units.
 // ══════════════════════════════════════════════════════════════
 
 struct SensorReading: Codable, Equatable, Sendable {
@@ -14,7 +13,7 @@ struct SensorReading: Codable, Equatable, Sendable {
     let temperature:   Double   // °C      — from DHT11
     let humidity:      Double   // %       — from DHT11
     let soilMoisture:  Double   // %       — from soil probe (0–100)
-    let lightIntensity: Double  // lux     — converted from raw ADC
+    let lightIntensity: Double  // %       — from light sensor calibration (0-100)
 
     var formattedTimestamp: String {
         let f = DateFormatter()
@@ -32,11 +31,10 @@ struct SensorReading: Codable, Equatable, Sendable {
 //   t → temperature in °C (DHT11 already outputs °C)
 //   h → humidity in %     (DHT11 already outputs %)
 //   m → soil moisture in % (firmware maps ADC → 0–100 before sending)
-//   l → raw photoresistor ADC value (0–4095 on ESP32 12-bit ADC)
+//   l → light level in % (firmware maps ADC → 0–100 before sending)
 //   rtc_timestamp / timestamp / measured_at / created_at → reading time
 //
-// Only light needs conversion here. Temperature, humidity, and
-// soil moisture arrive in final units from the firmware.
+// All values arrive in final units from the firmware.
 // ══════════════════════════════════════════════════════════════
 
 extension SensorReading {
@@ -46,7 +44,7 @@ extension SensorReading {
         let t: Double   // temperature °C
         let h: Double   // humidity %
         let m: Double   // soil moisture %
-        let l: Double   // raw ADC (0–4095)
+        let l: Double   // light %
 
         private enum CodingKeys: String, CodingKey {
             case timestamp
@@ -98,26 +96,7 @@ extension SensorReading {
         self.temperature    = payload.t
         self.humidity       = payload.h
         self.soilMoisture   = payload.m
-        self.lightIntensity = SensorReading.rawAdcToLux(payload.l)
-    }
-
-    // ── Raw ADC → lux conversion for KY-018 ─────────────────
-    //
-    // KY-018 wiring (pull-down):
-    //   Bright light → low resistance → voltage drops → ADC near 0
-    //   Dark          → high resistance → voltage rises → ADC near 4095
-    //
-    // So the mapping is INVERTED:
-    //   ADC 0    ≈ 100,000 lux  (flashlight directly on sensor)
-    //   ADC 4095 ≈ 0 lux        (fully covered)
-    //
-    // We invert first, then scale linearly to lux.
-    private static func rawAdcToLux(_ rawADC: Double) -> Double {
-        let maxADC: Double = 4095
-        let maxLux: Double = 100_000
-        let inverted = maxADC - rawADC          // flip: 0 → 4095, 4095 → 0
-        let lux = (inverted / maxADC) * maxLux
-        return lux.rounded()
+        self.lightIntensity = payload.l
     }
 }
 
@@ -142,11 +121,11 @@ private extension ISO8601DateFormatter {
 // ══════════════════════════════════════════════════════════════
 // MARK: — Validity check
 //
-// Validates converted values (lux, not raw ADC).
+// Validates final display values.
 // Common ESP32 failure modes:
 //   DHT11 disconnect  → NaN
 //   Soil probe short  → negative or >100
-//   Photoresistor     → saturated at 0 or 4095 (≈ 0 or 100k lux)
+//   Photoresistor     → negative or >100 after calibration
 // ══════════════════════════════════════════════════════════════
 
 extension SensorReading {
@@ -157,7 +136,7 @@ extension SensorReading {
         guard (-10...60).contains(temperature)       else { return false }
         guard (0...100).contains(humidity)           else { return false }
         guard (0...100).contains(soilMoisture)       else { return false }
-        guard (0...100_000).contains(lightIntensity) else { return false }
+        guard (0...100).contains(lightIntensity) else { return false }
         return true
     }
 }

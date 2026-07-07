@@ -25,9 +25,12 @@ struct PlantDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @StateObject private var viewModel = PlantPipelineViewModel()
+    @StateObject private var ble = ESP32BLEManager.shared
 
     @State private var isChecking = false
     @State private var checkErrorMessage: String?
+    @State private var didFetchFreshReading = false
+    @State private var lastRenderedReadingFingerprint: String?
 
     var body: some View {
         mainContent
@@ -45,7 +48,16 @@ struct PlantDetailView: View {
                         nickname: profile.nickname,
                         imageData: profile.imageData
                     )
+                    renderLatestBLEReadingIfAvailable()
+                    if !didFetchFreshReading {
+                        didFetchFreshReading = true
+                        await performCheck()
+                    }
                 }
+            }
+            .onChange(of: ble.latestReading) { _, reading in
+                guard let reading, !isChecking else { return }
+                renderIfChanged(reading: reading, shouldRecord: false)
             }
     }
 
@@ -61,19 +73,57 @@ struct PlantDetailView: View {
         isChecking = true
         checkErrorMessage = nil
         do {
-            let freshReading = try await PlantDataService().fetchLatestReading()
+            renderLatestBLEReadingIfAvailable()
+            let freshReading = try await fetchLatestReading()
+            render(reading: freshReading, shouldRecord: true)
+        } catch {
+            if let bleReading = ble.latestReading {
+                render(reading: bleReading, shouldRecord: true)
+                checkErrorMessage = "Showing the latest Bluetooth reading because the Wi-Fi sensor endpoint did not respond."
+            } else {
+                checkErrorMessage = error.localizedDescription
+            }
+        }
+        isChecking = false
+    }
+
+    private func fetchLatestReading() async throws -> SensorReading {
+        try await PlantDataService(profile: profile).fetchLatestReading()
+    }
+
+    private func renderLatestBLEReadingIfAvailable() {
+        guard let reading = ble.latestReading else { return }
+        renderIfChanged(reading: reading, shouldRecord: false)
+    }
+
+    private func renderIfChanged(reading: SensorReading, shouldRecord: Bool) {
+        let fingerprint = [
+            Int(reading.temperature.rounded()),
+            Int(reading.humidity.rounded()),
+            Int(reading.soilMoisture.rounded()),
+            Int(reading.lightIntensity.rounded())
+        ]
+        .map(String.init)
+        .joined(separator: "-")
+
+        guard shouldRecord || fingerprint != lastRenderedReadingFingerprint else { return }
+        lastRenderedReadingFingerprint = fingerprint
+        render(reading: reading, shouldRecord: shouldRecord)
+    }
+
+    private func render(reading: SensorReading, shouldRecord: Bool) {
+        Task {
             await viewModel.refresh(
-                reading: freshReading,
+                reading: reading,
                 profile: profile,
                 species: profile.name,
                 nickname: profile.nickname,
                 imageData: profile.imageData
             )
-            recordCheckIn(reading: freshReading)
-        } catch {
-            checkErrorMessage = error.localizedDescription
+            if shouldRecord {
+                recordCheckIn(reading: reading)
+            }
         }
-        isChecking = false
     }
 
     // MARK: — Main content
@@ -303,15 +353,7 @@ struct PlantDetailView: View {
 
     private func insightPanel(_ plant: PlantCardData?) -> some View {
         Group {
-            if isChecking {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .tint(.white)
-                    Spacer()
-                }
-                .frame(minHeight: 60)
-            } else if let plant {
+            if let plant {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(plant.aiInsightTitle)
                         .font(.system(.title3, design: .rounded).weight(.bold))
@@ -324,6 +366,14 @@ struct PlantDetailView: View {
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if isChecking {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(.white)
+                    Spacer()
+                }
+                .frame(minHeight: 60)
             }
         }
         .padding(20)
@@ -469,15 +519,15 @@ final class PlantPipelineViewModel: ObservableObject {
         let metrics = SensorKind.allCases.map { $0.metric(reading: reading, thresholds: profile.thresholds()) }
 
         lastDetectionLevel = detection.overallLevel
+        cardData = fallbackCard(
+            for: detection.overallLevel, species: species, nickname: nickname,
+            imageData: imageData, metrics: metrics
+        )
 
         guard PlantExplainer.isAvailable() else {
             // A missing FM only means a less personal message — not
             // worth alarming the user over when the plant is fine.
             errorMessage = detection.isHealthy ? nil : (PlantExplainer.unavailableReason() ?? "Apple Intelligence unavailable.")
-            cardData = fallbackCard(
-                for: detection.overallLevel, species: species, nickname: nickname,
-                imageData: imageData, metrics: metrics
-            )
             isLoading = false
             return
         }
@@ -588,7 +638,7 @@ private enum SensorKind: CaseIterable {
         case .temperature: return thresholds.minTemperatureC...thresholds.maxTemperatureC
         case .humidity:     return thresholds.minHumidityPercent...thresholds.maxHumidityPercent
         case .soilMoisture: return thresholds.minSoilMoisturePercent...thresholds.maxSoilMoisturePercent
-        case .light:        return thresholds.minLightLux...thresholds.maxLightLux
+        case .light:        return thresholds.lightPercentRange
         }
     }
 
@@ -634,10 +684,7 @@ private enum SensorKind: CaseIterable {
         switch self {
         case .temperature: return String(format: "%.0f°C", value)
         case .humidity, .soilMoisture: return String(format: "%.0f%%", value)
-        // No "lux" suffix — raw light readings run into 5 digits, which
-        // doesn't fit the pill; the "Ideal ... lux" range text next to
-        // it already carries the unit.
-        case .light: return String(format: "%.0f", value)
+        case .light: return String(format: "%.0f%%", value)
         }
     }
 
@@ -645,7 +692,7 @@ private enum SensorKind: CaseIterable {
         switch self {
         case .temperature: return String(format: "%.0f°C", value)
         case .humidity, .soilMoisture: return String(format: "%.0f%%", value)
-        case .light: return String(format: "%.0f lux", value)
+        case .light: return String(format: "%.0f%%", value)
         }
     }
 }
@@ -699,7 +746,7 @@ struct PlantMetric: Identifiable {
             minTemperatureC: 18, maxTemperatureC: 26,
             minHumidityPercent: 40, maxHumidityPercent: 80,
             minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
-            minLightLux: 10_000, maxLightLux: 25_000
+            minLightLux: 40, maxLightLux: 80
         )
     )
     container.mainContext.insert(monstera)
@@ -727,7 +774,7 @@ struct PlantMetric: Identifiable {
             minTemperatureC: 18, maxTemperatureC: 26,
             minHumidityPercent: 40, maxHumidityPercent: 80,
             minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
-            minLightLux: 10_000, maxLightLux: 25_000
+            minLightLux: 40, maxLightLux: 80
         )
     )
     container.mainContext.insert(monstera)
@@ -767,4 +814,3 @@ struct PlantMetric: Identifiable {
     }
     .modelContainer(container)
 }
-

@@ -28,6 +28,7 @@ struct PlantSetupView: View {
     /// appears — new plants always arrive with one already selected.
     var preselectedDeviceID: String? = nil
     var preselectedDeviceName: String? = nil
+    var preselectedSensorBaseURL: String? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -41,6 +42,7 @@ struct PlantSetupView: View {
     @State private var nickname: String
     @State private var linkedDeviceID: String?
     @State private var linkedDeviceName: String?
+    @State private var sensorBaseURL: String?
     @State private var showingDevicePicker = false
     @State private var isLoading = false
     @State private var phase = SetupPhase.idle
@@ -55,15 +57,18 @@ struct PlantSetupView: View {
     init(
         editingProfile: PlantProfile? = nil,
         preselectedDeviceID: String? = nil,
-        preselectedDeviceName: String? = nil
+        preselectedDeviceName: String? = nil,
+        preselectedSensorBaseURL: String? = nil
     ) {
         self.editingProfile = editingProfile
         self.preselectedDeviceID = preselectedDeviceID
         self.preselectedDeviceName = preselectedDeviceName
+        self.preselectedSensorBaseURL = preselectedSensorBaseURL
         _plantName = State(initialValue: editingProfile?.name ?? "")
         _nickname = State(initialValue: editingProfile?.nickname ?? "")
         _linkedDeviceID = State(initialValue: editingProfile?.linkedDeviceID ?? preselectedDeviceID)
         _linkedDeviceName = State(initialValue: editingProfile?.linkedDeviceName ?? preselectedDeviceName)
+        _sensorBaseURL = State(initialValue: editingProfile?.sensorBaseURL ?? preselectedSensorBaseURL)
         if let data = editingProfile?.imageData, let image = UIImage(data: data) {
             _plantImage = State(initialValue: image)
         }
@@ -237,12 +242,16 @@ struct PlantSetupView: View {
                             Text("Tap to connect a sensor")
                                 .font(AppTheme.Typography.caption)
                                 .foregroundStyle(AppTheme.Colors.textSecondary)
+                        } else if sensorBaseURL == nil {
+                            Text("Finish Wi-Fi setup first")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.Colors.warning)
                         } else if deviceClaimedByAnotherPlant {
                             Text("Already linked to another plant")
                                 .font(AppTheme.Typography.caption)
                                 .foregroundStyle(AppTheme.Colors.critical)
                         } else {
-                            Text("Signal Strong")
+                            Text("Wi-Fi ready")
                                 .font(AppTheme.Typography.caption)
                                 .foregroundStyle(AppTheme.Colors.textSecondary)
                         }
@@ -286,6 +295,7 @@ struct PlantSetupView: View {
                     Button {
                         linkedDeviceID = device.id.uuidString
                         linkedDeviceName = device.name
+                        sensorBaseURL = nil
                         showingDevicePicker = false
                         ble.stopScanning()
                     } label: {
@@ -436,6 +446,7 @@ struct PlantSetupView: View {
         plantName.trimmingCharacters(in: .whitespaces).isEmpty
             || isLoading
             || linkedDeviceID == nil
+            || sensorBaseURL == nil
             || deviceClaimedByAnotherPlant
     }
 
@@ -542,7 +553,8 @@ struct PlantSetupView: View {
             nickname: displayNickname,
             thresholds: thresholds,
             linkedDeviceID: linkedDeviceID,
-            linkedDeviceName: linkedDeviceName
+            linkedDeviceName: linkedDeviceName,
+            sensorBaseURL: sensorBaseURL
         )
         profile.imageData = plantImage?.jpegData(compressionQuality: 0.85)
 
@@ -606,6 +618,7 @@ struct PlantSetupView: View {
         profile.nickname = displayNickname
         profile.linkedDeviceID = linkedDeviceID
         profile.linkedDeviceName = linkedDeviceName
+        profile.sensorBaseURL = sensorBaseURL
         if let plantImage {
             profile.imageData = plantImage.jpegData(compressionQuality: 0.85)
         }

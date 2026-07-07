@@ -30,6 +30,7 @@ final class PlantProfile {
     // rest of the form can be filled in.
     var linkedDeviceID: String?
     var linkedDeviceName: String?
+    var sensorBaseURL: String?
 
     // Gemini-fetched thresholds — stored so runtime is offline
     var minTemperatureC: Double   // °C
@@ -38,7 +39,7 @@ final class PlantProfile {
     var maxHumidityPercent: Double
     var minSoilMoisturePercent: Double  // %
     var maxSoilMoisturePercent: Double
-    var minLightLux: Double         // lux
+    var minLightLux: Double         // Stored as light % for new plants; legacy rows may contain lux.
     var maxLightLux: Double
 
     // Last known sensor reading — used for dashboard display.
@@ -59,7 +60,8 @@ final class PlantProfile {
         thresholds: PlantThresholds,
         imageData: Data? = nil,
         linkedDeviceID: String? = nil,
-        linkedDeviceName: String? = nil
+        linkedDeviceName: String? = nil,
+        sensorBaseURL: String? = nil
     ) {
         self.name         = name
         self.nickname     = nickname
@@ -67,6 +69,7 @@ final class PlantProfile {
         self.lastStatus   = "healthy"
         self.linkedDeviceID   = linkedDeviceID
         self.linkedDeviceName = linkedDeviceName
+        self.sensorBaseURL    = sensorBaseURL
 
         self.minTemperatureC  = thresholds.minTemperatureC
         self.maxTemperatureC  = thresholds.maxTemperatureC
@@ -129,5 +132,18 @@ extension PlantProfile {
             minLightLux:        minLightLux,
             maxLightLux:        maxLightLux
         )
+    }
+}
+
+extension PlantThresholds {
+    var lightPercentRange: ClosedRange<Double> {
+        let lower = minLightLux
+        let upper = maxLightLux
+
+        guard (0...100).contains(lower), (0...100).contains(upper), lower <= upper else {
+            return 40...80
+        }
+
+        return lower...upper
     }
 }
