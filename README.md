@@ -5,8 +5,8 @@
 Our initial idea was to build PlantPal with a machine learning model
 that predicts whether a plant is healthy or unhealthy from IoT sensor
 readings. After experimenting with the dataset, we found that the data
-was not suitable for a reliable classifier. Instead of forcing the model
-into the app, we changed to a rule-based approach that is more accurate
+was not suitable for a reliable classifier (why?). Instead of forcing the model
+into the app, we changed to a rule-based approach (which is?) that is more accurate (in which way?)
 for the available data.
 
 ## Machine Learning Exploration
