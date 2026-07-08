@@ -24,9 +24,17 @@ struct DevicePairingView: View {
 
     @StateObject private var ble = ESP32BLEManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var ssid = ""
     @State private var password = ""
+
+    /// `leafGreen`'s dark variant is nearly the same shade as the Wi-Fi
+    /// form's own material background, so the labels disappear in dark
+    /// mode — swap to a brighter green there, same as PlantSetupView.
+    private var formLabelColor: Color {
+        colorScheme == .dark ? AppTheme.Colors.success : AppTheme.Colors.leafGreen
+    }
 
     private var isSelectionMode: Bool { onSelect != nil && onProvisioned == nil }
 
@@ -191,12 +199,13 @@ struct DevicePairingView: View {
                 HStack {
                     Text("Wi-Fi Name")
                         .font(AppTheme.Typography.cardTitle)
-                        .foregroundStyle(AppTheme.Colors.leafGreen)
+                        .foregroundStyle(formLabelColor)
                     Spacer()
                     TextField("Home Wi-Fi", text: $ssid)
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                         .accessibilityLabel("Wi-Fi network name")
                 }
 
@@ -205,10 +214,11 @@ struct DevicePairingView: View {
                 HStack {
                     Text("Password")
                         .font(AppTheme.Typography.cardTitle)
-                        .foregroundStyle(AppTheme.Colors.leafGreen)
+                        .foregroundStyle(formLabelColor)
                     Spacer()
                     SecureField("Required", text: $password)
                         .multilineTextAlignment(.trailing)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                         .accessibilityLabel("Wi-Fi password")
                 }
             }

@@ -8,15 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 6C1481092FF4F34C00A03EA5 /* .gitignore */; };
-		6C14816D2FF4F4ED00A03EA5 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */; };
 		6C14816F2FF4F6B200A03EA5 /* SecretsExample.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */; };
+		6C85CE6D2FFE1BEA0083997B /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		635908242FF39EFB0069A632 /* PlantPal-CH4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PlantPal-CH4.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C1481092FF4F34C00A03EA5 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
-		6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = SecretsExample.xcconfig; sourceTree = "<group>"; };
+		6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -55,8 +55,8 @@
 			isa = PBXGroup;
 			children = (
 				6C1481092FF4F34C00A03EA5 /* .gitignore */,
-				6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */,
 				6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */,
+				6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */,
 				635908262FF39EFB0069A632 /* ios */,
 				635908252FF39EFB0069A632 /* Products */,
 			);
@@ -148,7 +148,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6C14816F2FF4F6B200A03EA5 /* SecretsExample.xcconfig in Resources */,
-				6C14816D2FF4F4ED00A03EA5 /* Secrets.xcconfig in Resources */,
+				6C85CE6D2FFE1BEA0083997B /* Secrets.xcconfig in Resources */,
 				6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -168,7 +168,6 @@
 /* Begin XCBuildConfiguration section */
 		6359082D2FF39EFB0069A632 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6C14816C2FF4F4ED00A03EA5 /* Secrets.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -294,16 +293,16 @@
 		};
 		635908302FF39EFB0069A632 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Y4648M7S2X;
+				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -329,16 +328,16 @@
 		};
 		635908312FF39EFB0069A632 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Y4648M7S2X;
+				DEVELOPMENT_TEAM = Q7PFUBX7QB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

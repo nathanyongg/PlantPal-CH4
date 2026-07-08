@@ -21,7 +21,7 @@ import Foundation
 //   □ Info.plist has GEMINI_API_KEY = $(GEMINI_API_KEY)
 // ══════════════════════════════════════════════════════════════
 
-enum SecretsManager {
+nonisolated enum SecretsManager {
 
     static var geminiAPIKey: String {
         key(named: "GEMINI_API_KEY")

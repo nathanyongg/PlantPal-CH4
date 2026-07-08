@@ -91,7 +91,7 @@ final class PlantProfile {
 // model itself since it's transient.
 // ══════════════════════════════════════════════════════════════
 
-struct PlantThresholds: Codable {
+nonisolated struct PlantThresholds: Codable {
     let minTemperatureC: Double
     let maxTemperatureC: Double
 

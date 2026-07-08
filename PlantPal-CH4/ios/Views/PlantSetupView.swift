@@ -66,10 +66,19 @@ struct PlantSetupView: View {
         self.preselectedSensorBaseURL = preselectedSensorBaseURL
         _plantName = State(initialValue: editingProfile?.name ?? "")
         _nickname = State(initialValue: editingProfile?.nickname ?? "")
-        _linkedDeviceID = State(initialValue: editingProfile?.linkedDeviceID ?? preselectedDeviceID)
-        _linkedDeviceName = State(initialValue: editingProfile?.linkedDeviceName ?? preselectedDeviceName)
-        _sensorBaseURL = State(initialValue: editingProfile?.sensorBaseURL ?? preselectedSensorBaseURL)
-        if let data = editingProfile?.imageData, let image = UIImage(data: data) {
+        _linkedDeviceID = State(
+            initialValue: editingProfile?.linkedDeviceID ?? preselectedDeviceID
+        )
+        _linkedDeviceName = State(
+            initialValue: editingProfile?.linkedDeviceName
+                ?? preselectedDeviceName
+        )
+        _sensorBaseURL = State(
+            initialValue: editingProfile?.sensorBaseURL
+                ?? preselectedSensorBaseURL
+        )
+        if let data = editingProfile?.imageData, let image = UIImage(data: data)
+        {
             _plantImage = State(initialValue: image)
         }
     }
@@ -79,17 +88,22 @@ struct PlantSetupView: View {
     private var deviceClaimedByAnotherPlant: Bool {
         guard let linkedDeviceID else { return false }
         return allProfiles.contains {
-            $0.linkedDeviceID == linkedDeviceID && $0.persistentModelID != editingProfile?.persistentModelID
+            $0.linkedDeviceID == linkedDeviceID
+                && $0.persistentModelID != editingProfile?.persistentModelID
         }
     }
 
     private var availableDevices: [ESP32BLEManager.DiscoveredDevice] {
         let claimedElsewhere = Set(
             allProfiles
-                .filter { $0.persistentModelID != editingProfile?.persistentModelID }
+                .filter {
+                    $0.persistentModelID != editingProfile?.persistentModelID
+                }
                 .compactMap(\.linkedDeviceID)
         )
-        return ble.discoveredDevices.filter { !claimedElsewhere.contains($0.id.uuidString) }
+        return ble.discoveredDevices.filter {
+            !claimedElsewhere.contains($0.id.uuidString)
+        }
     }
 
     enum SetupPhase {
@@ -163,7 +177,9 @@ struct PlantSetupView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes \(editingProfile?.nickname ?? "this plant") and its check-in history. This can't be undone.")
+            Text(
+                "This removes \(editingProfile?.nickname ?? "this plant") and its check-in history. This can't be undone."
+            )
         }
     }
 
@@ -171,7 +187,8 @@ struct PlantSetupView: View {
     /// card's own background, so the labels disappear in dark mode —
     /// swap to a brighter green there. Light mode is untouched.
     private var formLabelColor: Color {
-        colorScheme == .dark ? AppTheme.Colors.success : AppTheme.Colors.leafGreen
+        colorScheme == .dark
+            ? AppTheme.Colors.success : AppTheme.Colors.leafGreen
     }
 
     // MARK: — Delete
@@ -192,7 +209,10 @@ struct PlantSetupView: View {
                 .foregroundStyle(AppTheme.Colors.textPrimary)
 
             HStack {
-                IconCircleButton(systemImage: "chevron.left", accessibilityLabel: "Back") {
+                IconCircleButton(
+                    systemImage: "chevron.left",
+                    accessibilityLabel: "Back"
+                ) {
                     dismiss()
                 }
 
@@ -203,7 +223,8 @@ struct PlantSetupView: View {
                         systemImage: "trash",
                         tint: AppTheme.Colors.critical,
                         accessibilityLabel: "Delete Plant",
-                        accessibilityHint: "Removes this plant and its check-in history"
+                        accessibilityHint:
+                            "Removes this plant and its check-in history"
                     ) {
                         showingDeleteConfirmation = true
                     }
@@ -259,14 +280,35 @@ struct PlantSetupView: View {
 
                     Spacer()
 
-                    Image(systemName: showingDevicePicker ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                    Image(
+                        systemName: showingDevicePicker
+                            ? "chevron.up" : "chevron.down"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous))
-                .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.medium, style: .continuous), colorScheme: colorScheme)
+                .background(
+                    AppTheme.Colors.surface,
+                    in: RoundedRectangle(
+                        cornerRadius: AppTheme.Radius.medium,
+                        style: .continuous
+                    )
+                )
+                .appOutline(
+                    RoundedRectangle(
+                        cornerRadius: AppTheme.Radius.medium,
+                        style: .continuous
+                    ),
+                    colorScheme: colorScheme
+                )
+                .contentShape(
+                    RoundedRectangle(
+                        cornerRadius: AppTheme.Radius.medium,
+                        style: .continuous
+                    )
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Device")
@@ -310,7 +352,19 @@ struct PlantSetupView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
+                        .background(
+                            AppTheme.Colors.surface,
+                            in: RoundedRectangle(
+                                cornerRadius: AppTheme.Radius.small,
+                                style: .continuous
+                            )
+                        )
+                        .contentShape(
+                            RoundedRectangle(
+                                cornerRadius: AppTheme.Radius.small,
+                                style: .continuous
+                            )
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -347,7 +401,10 @@ struct PlantSetupView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 450)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.large), colorScheme: colorScheme)
+        .appOutline(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large),
+            colorScheme: colorScheme
+        )
         .onTapGesture {
             showingPhotoOptions = true
         }
@@ -381,11 +438,20 @@ struct PlantSetupView: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.xlarge, style: .continuous)
-                .fill(AppTheme.Colors.leafGreen)
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
+            RoundedRectangle(
+                cornerRadius: AppTheme.Radius.xlarge,
+                style: .continuous
+            )
+            .fill(AppTheme.Colors.leafGreen)
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 4)
         )
-        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.xlarge, style: .continuous), colorScheme: colorScheme)
+        .appOutline(
+            RoundedRectangle(
+                cornerRadius: AppTheme.Radius.xlarge,
+                style: .continuous
+            ),
+            colorScheme: colorScheme
+        )
     }
 
     private var inputCard: some View {
@@ -439,7 +505,10 @@ struct PlantSetupView: View {
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.card), colorScheme: colorScheme)
+        .appOutline(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card),
+            colorScheme: colorScheme
+        )
     }
 
     private var isSaveDisabled: Bool {
@@ -457,15 +526,18 @@ struct PlantSetupView: View {
                 await setupPlant()
             }
         } label: {
-
             HStack(spacing: 10) {
                 if isLoading {
                     ProgressView()
                         .tint(.white)
                 }
 
-                Text(isLoading ? "Saving…" : (editingProfile == nil ? "Save" : "Save Changes"))
-                    .font(.headline)
+                Text(
+                    isLoading
+                        ? "Saving…"
+                        : (editingProfile == nil ? "Save" : "Save Changes")
+                )
+                .font(.headline)
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -474,6 +546,7 @@ struct PlantSetupView: View {
         .buttonStyle(.plain)
         .background(AppTheme.Colors.secondaryAccent, in: Capsule())
         .appOutline(Capsule(), colorScheme: colorScheme)
+        .contentShape(Capsule())
         .opacity(isSaveDisabled ? 0.5 : 1)
         .disabled(isSaveDisabled)
         .accessibilityLabel(isLoading ? "Saving plant" : "Save plant")
@@ -506,7 +579,9 @@ struct PlantSetupView: View {
         case .fetchingThresholds:
             return "Looking up care requirements for \(plantName)…"
         case .saving: return "Saving plant profile…"
-        case .done: return editingProfile == nil ? "Plant added successfully!" : "Changes saved!"
+        case .done:
+            return editingProfile == nil
+                ? "Plant added successfully!" : "Changes saved!"
         }
     }
 
@@ -593,13 +668,17 @@ struct PlantSetupView: View {
         if trimmedName != profile.name {
             phase = .fetchingThresholds
             do {
-                let thresholds = try await GeminiService.shared.fetchThresholds(for: trimmedName)
+                let thresholds = try await GeminiService.shared.fetchThresholds(
+                    for: trimmedName
+                )
                 profile.minTemperatureC = thresholds.minTemperatureC
                 profile.maxTemperatureC = thresholds.maxTemperatureC
                 profile.minHumidityPercent = thresholds.minHumidityPercent
                 profile.maxHumidityPercent = thresholds.maxHumidityPercent
-                profile.minSoilMoisturePercent = thresholds.minSoilMoisturePercent
-                profile.maxSoilMoisturePercent = thresholds.maxSoilMoisturePercent
+                profile.minSoilMoisturePercent =
+                    thresholds.minSoilMoisturePercent
+                profile.maxSoilMoisturePercent =
+                    thresholds.maxSoilMoisturePercent
                 profile.minLightLux = thresholds.minLightLux
                 profile.maxLightLux = thresholds.maxLightLux
             } catch {
