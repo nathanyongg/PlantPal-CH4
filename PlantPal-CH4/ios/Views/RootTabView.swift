@@ -71,13 +71,14 @@ struct DashboardView: View {
             AppBackground {
                 VStack(spacing: 16) {
                     header
-                    searchField
+//                    searchField
 
                     if filteredPlants.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
                     } else {
+                        searchField
                         plantList
                     }
                 }
@@ -162,11 +163,13 @@ struct DashboardView: View {
                     showingConnectDevice = true
                 }
 
-                IconCircleButton(
-                    systemImage: "antenna.radiowaves.left.and.right",
-                    accessibilityLabel: "Test Plant Sensor Pairing"
-                ) {
-                    showingDevicePairing = true
+                if !filteredPlants.isEmpty {
+                    IconCircleButton(
+                        systemImage: "antenna.radiowaves.left.and.right",
+                        accessibilityLabel: "Test Plant Sensor Pairing"
+                    ) {
+                        showingDevicePairing = true
+                    }
                 }
 
                 IconCircleButton(systemImage: "gearshape.fill", accessibilityLabel: "Settings") {
@@ -257,24 +260,39 @@ struct DashboardView: View {
 extension DashboardView {
     fileprivate var emptyState: some View {
 
-        VStack(spacing: 20) {
+        VStack(spacing: 40) {
 
-            Image(systemName: "leaf.circle")
-                .font(.system(size: 80))
-                .foregroundStyle(AppTheme.Colors.success)
+            Image(systemName: "leaf.fill")
+                .font(.system(size: 60))
+                .foregroundStyle(AppTheme.Colors.leafGreen)
                 .accessibilityHidden(true)
 
-            Text("No Plants Yet")
-                .font(AppTheme.Typography.sectionTitle)
-                .foregroundStyle(AppTheme.Colors.textPrimary)
+            VStack(spacing: 10) {
+                Text("Your Plant Collection is Empty")
+                    .font(Font.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
 
-            Text("Add your plant to begin monitoring its health.")
-                .font(AppTheme.Typography.body)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                Text("Add your first plant to start tracking it’s health and growth.")
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            Button {
+                pendingDevice = nil
+                showingConnectDevice = true
+            } label: {
+                Text("Add Your Plant")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: 250)
+                    .frame(height: 54)
+            }
+            .background(AppTheme.Colors.leafGreen, in: Capsule())
 
         }
+        .padding(.top, -60)
         .accessibilityElement(children: .combine)
     }
 }
@@ -342,9 +360,9 @@ extension DashboardView {
     )
     cactus.lastStatus = "healthy"
 
-    container.mainContext.insert(monstera)
-    container.mainContext.insert(pothos)
-    container.mainContext.insert(cactus)
+//    container.mainContext.insert(monstera)
+//    container.mainContext.insert(pothos)
+//    container.mainContext.insert(cactus)
 
     return RootTabView()
         .modelContainer(container)
