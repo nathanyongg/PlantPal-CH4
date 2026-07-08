@@ -2,6 +2,13 @@ import SwiftData
 import SwiftUI
 internal import Combine
 
+private enum SensorReadingPath: Equatable {
+    case notChecked
+    case wifi
+    case bluetoothFallback(String)
+    case failed(String)
+}
+
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantDetailView
 //
@@ -33,6 +40,8 @@ struct PlantDetailView: View {
 
     @State private var isChecking = false
     @State private var checkErrorMessage: String?
+    @State private var isSensorDetailsExpanded = false
+    @State private var sensorReadingPath: SensorReadingPath = .notChecked
 
     // Foundation Model calls only ever happen from an explicit user
     // action — pull-to-refresh or the header's refresh button, both of
@@ -58,6 +67,9 @@ struct PlantDetailView: View {
                     )
                 }
             }
+            .task {
+                await runLiveSensorUpdates()
+            }
     }
 
     // MARK: — Check conditions (explicit, one shared sensor)
@@ -73,23 +85,59 @@ struct PlantDetailView: View {
         checkErrorMessage = nil
         do {
             let freshReading = try await fetchLatestReading()
+            sensorReadingPath = .wifi
             render(reading: freshReading, shouldRecord: true)
         } catch {
-            if let bleReading = ble.latestReading {
+            if let bleReading = ble.latestReading, bleReading.isValid {
+                sensorReadingPath = .bluetoothFallback(error.localizedDescription)
                 render(reading: bleReading, shouldRecord: true)
-                checkErrorMessage = "Showing the latest Bluetooth reading because the Wi-Fi sensor endpoint did not respond."
+                checkErrorMessage = "Wi-Fi is not reachable right now, so PlantPal fell back to the latest Bluetooth sensor reading."
             } else {
+                sensorReadingPath = .failed(error.localizedDescription)
                 checkErrorMessage = error.localizedDescription
             }
         }
         isChecking = false
     }
 
-    private func fetchLatestReading() async throws -> SensorReading {
-        try await PlantDataService(profile: profile).fetchLatestReading()
+    private func runLiveSensorUpdates() async {
+        guard previewCardData == nil else { return }
+
+        while !Task.isCancelled {
+            await refreshLiveReading()
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func refreshLiveReading() async {
+        do {
+            let freshReading = try await fetchLatestReading(timeout: 1)
+            sensorReadingPath = .wifi
+            await applyLiveReading(freshReading)
+        } catch {
+            if let bleReading = ble.latestReading, bleReading.isValid {
+                sensorReadingPath = .bluetoothFallback(error.localizedDescription)
+                await applyLiveReading(bleReading)
+            } else if viewModel.cardData == nil {
+                sensorReadingPath = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    private func fetchLatestReading(timeout: TimeInterval = 6) async throws -> SensorReading {
+        try await PlantDataService(profile: profile, timeout: timeout).fetchLatestReading()
     }
 
     private func render(reading: SensorReading, shouldRecord: Bool) {
+        guard reading.isValid else {
+            checkErrorMessage = PlantDataServiceError.invalidReading.localizedDescription
+            return
+        }
+
         Task {
             await viewModel.refresh(
                 reading: reading,
@@ -104,6 +152,19 @@ struct PlantDetailView: View {
         }
     }
 
+    private func applyLiveReading(_ reading: SensorReading) async {
+        guard reading.isValid else { return }
+
+        await viewModel.applyLiveReading(
+            reading: reading,
+            profile: profile,
+            species: profile.name,
+            nickname: profile.nickname,
+            imageData: profile.imageData
+        )
+        updateLastKnownReading(reading: reading)
+    }
+
     // MARK: — Main content
 
     private var mainContent: some View {
@@ -113,13 +174,14 @@ struct PlantDetailView: View {
                 header
                 photoAndMoodRow
 
-                // Shows as soon as a check starts (with a spinner) so it
-                // doesn't pop in only once the Foundation Model finishes —
-                // and stays hidden until either a check is in flight or a
-                // genuine result (not the "last known" placeholder) exists.
-                if isChecking || (viewModel.cardData?.isGenuineInsight == true) {
+                // Shows as soon as a check starts and remains visible
+                // for the last known card data, so the insight area does
+                // not disappear between fresh sensor checks.
+                if isChecking || viewModel.cardData != nil {
                     insightPanel(viewModel.cardData)
                 }
+
+                sensorDeviceCard
 
                 if let plant = viewModel.cardData {
                     metricsRow(plant)
@@ -132,13 +194,19 @@ struct PlantDetailView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 12)
             .padding(.bottom, 40)
             .animation(.spring(response: 0.5, dampingFraction: 0.85), value: isChecking)
-            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: viewModel.cardData?.isGenuineInsight)
+            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: viewModel.cardData != nil)
+            .animation(.spring(response: 0.4, dampingFraction: 0.88), value: isSensorDetailsExpanded)
         }
         .refreshable {
             await performCheck()
+        }
+        .onChange(of: isSensorDetailsExpanded) { _, isExpanded in
+            if isExpanded {
+                ble.refreshSignalStrength()
+            }
         }
     }
 
@@ -161,8 +229,13 @@ struct PlantDetailView: View {
         )
         modelContext.insert(entry)
 
+        updateLastKnownReading(reading: reading, status: status)
+    }
+
+    private func updateLastKnownReading(reading: SensorReading, status: String? = nil) {
+        let level = viewModel.lastDetectionLevel ?? .healthy
         profile.lastReadingAt = reading.timestamp
-        profile.lastStatus = status
+        profile.lastStatus = status ?? (level == .critical ? "critical" : level == .warning ? "warning" : "healthy")
         profile.lastTemperatureC = reading.temperature
         profile.lastHumidityPercent = reading.humidity
         profile.lastSoilMoisturePercent = reading.soilMoisture
@@ -215,36 +288,48 @@ struct PlantDetailView: View {
     // MARK: — Header (species + name)
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(profile.name)
-                .font(AppTheme.Typography.subtitle.weight(.semibold))
-                .foregroundStyle(AppTheme.Colors.leafGreen)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(profile.nickname)
+                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
 
-            HStack(spacing: 6) {
-                Text(profile.nickname)
-                    .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                Text("🌱")
-                    .font(.system(size: 26))
-            }
+            Text(profile.name)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
         }
         .accessibilityElement(children: .combine)
     }
 
     // MARK: — Photo + mood/message
 
+    @ViewBuilder
     private var photoAndMoodRow: some View {
+        if let plant = viewModel.cardData {
+            photoAndMoodStacked(plant)
+        } else {
+            plantPhoto
+                .frame(width: 150, height: 205)
+        }
+    }
+
+    private func photoAndMoodStacked(_ plant: PlantCardData) -> some View {
         HStack(alignment: .top, spacing: 12) {
             plantPhoto
-                .frame(width: 165, height: 220)
+                .frame(width: 150, height: 205)
+                .layoutPriority(1)
 
             VStack(alignment: .trailing, spacing: 10) {
-                if let plant = viewModel.cardData {
-                    moodPill(plant)
-                    messageBubble(plant)
-                }
+                moodPill(plant)
+
+                messageBubble(plant)
             }
+            .padding(.top, 34)
             .frame(maxWidth: .infinity, alignment: .trailing)
+            .layoutPriority(1)
         }
     }
 
@@ -259,11 +344,11 @@ struct PlantDetailView: View {
                 photoPlaceholder
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .padding(8)
-        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .appOutline(RoundedRectangle(cornerRadius: 26, style: .continuous), colorScheme: colorScheme)
-        .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(6)
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .appOutline(RoundedRectangle(cornerRadius: 20, style: .continuous), colorScheme: colorScheme)
+        .shadow(color: .black.opacity(0.16), radius: 8, x: 0, y: 5)
     }
 
     private var photoPlaceholder: some View {
@@ -281,11 +366,11 @@ struct PlantDetailView: View {
                 .font(.system(size: 14))
             Text(plant.mood)
                 .font(AppTheme.Typography.subtitle.weight(.semibold))
-                .foregroundStyle(AppTheme.Colors.secondaryAccent)
+                .foregroundStyle(.white)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(AppTheme.Colors.lavenderPanel, in: Capsule())
+        .padding(.vertical, 7)
+        .background(AppTheme.Colors.insightPanel.opacity(0.9), in: Capsule())
         .appOutline(Capsule(), colorScheme: colorScheme)
     }
 
@@ -306,19 +391,258 @@ struct PlantDetailView: View {
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 
+    // MARK: — Sensor device card
+
+    private var sensorDeviceCard: some View {
+        DisclosureGroup(isExpanded: $isSensorDetailsExpanded) {
+            VStack(spacing: 12) {
+                Divider()
+
+                sensorDetailRow(
+                    icon: "wifi",
+                    title: "Wi-Fi",
+                    value: wifiDetailText,
+                    tint: wifiDetailTint
+                )
+
+                sensorDetailRow(
+                    icon: "antenna.radiowaves.left.and.right",
+                    title: "Bluetooth",
+                    value: bluetoothDetailText,
+                    tint: bluetoothDetailTint
+                )
+
+                sensorDetailRow(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "Reading path",
+                    value: readingPathDetailText,
+                    tint: readingPathTint
+                )
+
+                if let baseURLText = sensorBaseURLText {
+                    sensorDetailRow(
+                        icon: "link",
+                        title: "Endpoint",
+                        value: baseURLText,
+                        tint: AppTheme.Colors.textSecondary
+                    )
+                }
+            }
+            .padding(.top, 12)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: sensorCardIcon)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(sensorDeviceName)
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Text(signalText)
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 8)
+            }
+        }
+        .tint(AppTheme.Colors.textPrimary)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .appOutline(RoundedRectangle(cornerRadius: 12, style: .continuous), colorScheme: colorScheme)
+        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
+        .padding(.top, 4)
+        .accessibilityLabel("Sensor connection")
+        .accessibilityValue(signalText)
+        .accessibilityHint("Shows Wi-Fi and Bluetooth signal details")
+    }
+
+    private func sensorDetailRow(icon: String, title: String, value: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 20)
+
+            Text(title)
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 190, alignment: .trailing)
+        }
+    }
+
+    private var sensorDeviceName: String {
+        profile.linkedDeviceName ?? ble.connectedDeviceName ?? "PlantPal Sensor"
+    }
+
+    private var sensorCardIcon: String {
+        switch sensorReadingPath {
+        case .bluetoothFallback:
+            return "antenna.radiowaves.left.and.right"
+        default:
+            return "wifi"
+        }
+    }
+
+    private var signalText: String {
+        switch sensorReadingPath {
+        case .wifi:
+            return "Wi-Fi Connected"
+        case .bluetoothFallback:
+            return "Bluetooth Fallback"
+        case .failed:
+            return "Not connected"
+        case .notChecked:
+            if profile.sensorBaseURL != nil {
+                return "Wi-Fi ready"
+            }
+            if ble.latestReading != nil {
+                return "Bluetooth Available"
+            }
+            return "Not connected"
+        }
+    }
+
+    private var wifiDetailText: String {
+        switch sensorReadingPath {
+        case .wifi:
+            return "Reachable"
+        case .bluetoothFallback:
+            return "Unavailable"
+        case .failed:
+            return "Unavailable"
+        case .notChecked:
+            return profile.sensorBaseURL == nil ? "Not configured" : "Configured"
+        }
+    }
+
+    private var wifiDetailTint: Color {
+        switch sensorReadingPath {
+        case .wifi:
+            return AppTheme.Colors.success
+        case .bluetoothFallback, .failed:
+            return AppTheme.Colors.warning
+        case .notChecked:
+            return profile.sensorBaseURL == nil ? AppTheme.Colors.textSecondary : AppTheme.Colors.success
+        }
+    }
+
+    private var bluetoothDetailText: String {
+        if let rssi = ble.connectedRSSI {
+            return "\(bluetoothSignalQuality(for: rssi)) (\(rssi) dBm)"
+        }
+        if ble.latestReading != nil {
+            return "Reading available"
+        }
+        if ble.connectedDeviceName != nil {
+            return "Connected"
+        }
+        return "Unavailable"
+    }
+
+    private var bluetoothDetailTint: Color {
+        if ble.connectedRSSI != nil || ble.latestReading != nil || ble.connectedDeviceName != nil {
+            return AppTheme.Colors.success
+        }
+        return AppTheme.Colors.textSecondary
+    }
+
+    private var readingPathDetailText: String {
+        switch sensorReadingPath {
+        case .wifi:
+            return "Latest reading came from Wi-Fi."
+        case .bluetoothFallback:
+            return "Wi-Fi failed; using Bluetooth reading."
+        case .failed(let message):
+            return message
+        case .notChecked:
+            return profile.sensorBaseURL == nil
+                ? "Wi-Fi not configured; Bluetooth will be used if available."
+                : "Wi-Fi will be checked first."
+        }
+    }
+
+    private var readingPathTint: Color {
+        switch sensorReadingPath {
+        case .wifi:
+            return AppTheme.Colors.success
+        case .bluetoothFallback:
+            return AppTheme.Colors.warning
+        case .failed:
+            return AppTheme.Colors.critical
+        case .notChecked:
+            return AppTheme.Colors.textSecondary
+        }
+    }
+
+    private var sensorBaseURLText: String? {
+        guard let sensorBaseURL = profile.sensorBaseURL else { return nil }
+        return URL(string: sensorBaseURL)?.host ?? sensorBaseURL
+    }
+
+    private func bluetoothSignalQuality(for rssi: Int) -> String {
+        if rssi >= -60 {
+            return "Strong"
+        } else if rssi >= -75 {
+            return "Fair"
+        } else {
+            return "Weak"
+        }
+    }
+
     // MARK: — Metric rows
 
+    private var lastMetricUpdateText: String {
+        guard let lastReadingAt = profile.lastReadingAt else {
+            return "Updates after the next reading"
+        }
+
+        if lastReadingAt > Date().addingTimeInterval(60) {
+            return "Waiting for live sensor time"
+        }
+
+        return "Updated \(lastReadingAt.formatted(.relative(presentation: .named)))"
+    }
+
     private func metricsRow(_ plant: PlantCardData) -> some View {
-        VStack(spacing: 34) {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Conditions")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+
+                Text(lastMetricUpdateText)
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+
             ForEach(plant.metrics) { metric in
                 MetricRow(metric: metric)
             }
         }
-        .padding(20)
-        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
-        .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous), colorScheme: colorScheme)
-        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
-        .padding(.top, 14)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .appOutline(RoundedRectangle(cornerRadius: 16, style: .continuous), colorScheme: colorScheme)
+        .shadow(color: .black.opacity(0.09), radius: 12, x: 0, y: 7)
+        .padding(.top, 4)
     }
 
     // MARK: — Error banner (pipeline degraded but still showing data)
@@ -375,59 +699,72 @@ struct PlantDetailView: View {
 private struct MetricRow: View {
     let metric: PlantMetric
 
-    private let thumbWidth: CGFloat = 64
-    private let trackHeight: CGFloat = 32
+    private let thumbWidth: CGFloat = 42
+    private let thumbHeight: CGFloat = 22
+    private let trackHeight: CGFloat = 8
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(metric.name)
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .layoutPriority(1)
 
                 Spacer(minLength: 8)
 
-                Text(metric.idealRangeText)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-
                 HStack(spacing: 4) {
                     Text(metric.statusLabel)
-                        .font(.callout.weight(.bold))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.Colors.textPrimary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                     Text(metric.statusEmoji)
-                        .font(.callout)
+                        .font(.system(size: 17))
                 }
             }
 
+            Text(metric.idealRangeText)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, 34)
+
             GeometryReader { geo in
-                let clampedProgress = min(max(metric.progress, 0), 1)
-                let thumbX = thumbWidth / 2 + (geo.size.width - thumbWidth) * clampedProgress
+                let valueProgress = min(max(metric.progress, 0), 1)
+                let lowerProgress = min(max(metric.idealLowerProgress, 0), 1)
+                let upperProgress = min(max(metric.idealUpperProgress, 0), 1)
+                let availableWidth = max(geo.size.width - thumbWidth, 1)
+                let thumbX = thumbWidth / 2 + availableWidth * valueProgress
+                let idealStart = thumbWidth / 2 + availableWidth * min(lowerProgress, upperProgress)
+                let idealEnd = thumbWidth / 2 + availableWidth * max(lowerProgress, upperProgress)
 
                 ZStack(alignment: .leading) {
-                    Capsule().fill(AppTheme.Colors.border)
                     Capsule()
-                        .fill(metric.tint)
-                        .frame(width: max(thumbWidth / 2, thumbX))
+                        .fill(AppTheme.Colors.border.opacity(0.9))
+                        .frame(height: trackHeight)
+
+                    Capsule()
+                        .fill(metric.tint.opacity(0.92))
+                        .frame(width: max(thumbWidth * 0.45, idealEnd - idealStart), height: trackHeight)
+                        .offset(x: idealStart)
 
                     Text(metric.valueText)
-                        .font(.system(.callout, design: .rounded).weight(.bold))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, 8)
-                        .frame(width: thumbWidth, height: trackHeight)
+                        .minimumScaleFactor(0.75)
+                        .frame(width: thumbWidth, height: thumbHeight)
                         .background(metric.tint, in: Capsule())
                         .position(x: thumbX, y: geo.size.height / 2)
                 }
+                .frame(height: geo.size.height, alignment: .bottom)
             }
-            .frame(height: trackHeight)
+            .frame(height: 30)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(metric.name), \(metric.statusLabel), \(metric.valueText), \(metric.idealRangeText)")
@@ -542,6 +879,51 @@ final class PlantPipelineViewModel: ObservableObject {
         isLoading = false
     }
 
+    func applyLiveReading(
+        reading: SensorReading,
+        profile: PlantProfile,
+        species: String,
+        nickname: String,
+        imageData: Data?
+    ) {
+        let statuses = detector.assess(reading, for: profile)
+        let detection = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
+        let metrics = SensorKind.allCases.map { $0.metric(reading: reading, thresholds: profile.thresholds()) }
+        let (mood, emoji) = Self.mood(for: detection.overallLevel)
+
+        lastDetectionLevel = detection.overallLevel
+
+        guard var currentCardData = cardData else {
+            cardData = fallbackCard(
+                for: detection.overallLevel,
+                species: species,
+                nickname: nickname,
+                imageData: imageData,
+                metrics: metrics
+            )
+            return
+        }
+
+        currentCardData.species = species
+        currentCardData.nickname = nickname
+        currentCardData.imageData = imageData
+        currentCardData.mood = mood
+        currentCardData.moodEmoji = emoji
+        currentCardData.metrics = metrics
+
+        if !currentCardData.isGenuineInsight {
+            currentCardData.todaysMessage = detection.isHealthy
+                ? "I'm feeling good today!"
+                : "Something doesn't feel quite right today."
+            currentCardData.aiInsightTitle = detection.isHealthy ? "Looking great!" : "Needs attention"
+            currentCardData.aiInsight = detection.isHealthy
+                ? "Live readings are within the ideal range."
+                : "A live sensor reading is outside the ideal range."
+        }
+
+        cardData = currentCardData
+    }
+
     private func fallbackCard(
         for level: AlertLevel, species: String, nickname: String,
         imageData: Data?, metrics: [PlantMetric]
@@ -579,14 +961,11 @@ final class PlantPipelineViewModel: ObservableObject {
 // in PlantHealthTestView (SensorReading, PlantThresholds).
 
 private enum SensorKind: CaseIterable {
-    case temperature, humidity, soilMoisture, light
+    case light, temperature, humidity, soilMoisture
 
     func metric(reading: SensorReading, thresholds: PlantThresholds) -> PlantMetric {
         let range = idealRange(thresholds: thresholds)
         let value = rawValue(reading: reading)
-        let progress = range.upperBound > range.lowerBound
-            ? min(max((value - range.lowerBound) / (range.upperBound - range.lowerBound), 0), 1)
-            : 0.5
         let (label, emoji) = statusLabel(value: value, range: range)
 
         return PlantMetric(
@@ -597,7 +976,9 @@ private enum SensorKind: CaseIterable {
             statusEmoji: emoji,
             valueText: formattedValue(value),
             idealRangeText: "Ideal \(formattedBound(range.lowerBound)) - \(formattedBound(range.upperBound))",
-            progress: progress
+            progress: progress(for: value),
+            idealLowerProgress: progress(for: range.lowerBound),
+            idealUpperProgress: progress(for: range.upperBound)
         )
     }
 
@@ -649,17 +1030,17 @@ private enum SensorKind: CaseIterable {
     private func statusLabel(value: Double, range: ClosedRange<Double>) -> (String, String) {
         if value < range.lowerBound {
             switch self {
-            case .temperature: return ("Too cold", "❄️")
-            case .humidity:     return ("Too dry", "🥺")
-            case .soilMoisture: return ("Too dry", "🥺")
-            case .light:        return ("Too dark", "😴")
+            case .temperature: return ("Too Cold", "🥶")
+            case .humidity:     return ("Too Dry", "😖")
+            case .soilMoisture: return ("Too Dry", "😖")
+            case .light:        return ("Too Dark", "😴")
             }
         } else if value > range.upperBound {
             switch self {
-            case .temperature: return ("Too hot", "🥵")
-            case .humidity:     return ("Too humid", "💦")
-            case .soilMoisture: return ("Overwatered", "🫗")
-            case .light:        return ("Too bright", "🔆")
+            case .temperature: return ("Too Hot", "🥵")
+            case .humidity:     return ("Too Humid", "💦")
+            case .soilMoisture: return ("Too Much", "😧")
+            case .light:        return ("Too Bright", "🔆")
             }
         } else {
             return ("Perfect", "🤩")
@@ -667,11 +1048,7 @@ private enum SensorKind: CaseIterable {
     }
 
     private func formattedValue(_ value: Double) -> String {
-        switch self {
-        case .temperature: return String(format: "%.0f°C", value)
-        case .humidity, .soilMoisture: return String(format: "%.0f%%", value)
-        case .light: return String(format: "%.0f%%", value)
-        }
+        String(format: "%.0f", value)
     }
 
     private func formattedBound(_ value: Double) -> String {
@@ -679,6 +1056,15 @@ private enum SensorKind: CaseIterable {
         case .temperature: return String(format: "%.0f°C", value)
         case .humidity, .soilMoisture: return String(format: "%.0f%%", value)
         case .light: return String(format: "%.0f%%", value)
+        }
+    }
+
+    private func progress(for value: Double) -> Double {
+        switch self {
+        case .temperature:
+            return min(max((value - 0) / 50, 0), 1)
+        case .humidity, .soilMoisture, .light:
+            return min(max(value / 100, 0), 1)
         }
     }
 }
@@ -714,6 +1100,8 @@ struct PlantMetric: Identifiable {
     var valueText: String
     var idealRangeText: String
     var progress: Double // 0...1
+    var idealLowerProgress: Double
+    var idealUpperProgress: Double
 }
 
 // MARK: — Preview
@@ -776,19 +1164,28 @@ struct PlantMetric: Identifiable {
 
     let mockMetrics = [
         PlantMetric(
-            name: "Moisture", systemImage: "drop.fill", tint: AppTheme.Colors.sensorSoil,
-            statusLabel: "Too dry", statusEmoji: "🥺",
-            valueText: "10%", idealRangeText: "Ideal 50% - 80%", progress: 0.1
-        ),
-        PlantMetric(
             name: "Light", systemImage: "sun.max.fill", tint: AppTheme.Colors.sensorLight,
             statusLabel: "Perfect", statusEmoji: "🤩",
-            valueText: "60%", idealRangeText: "Ideal 40% - 80%", progress: 0.6
+            valueText: "75", idealRangeText: "Ideal 70% - 80%", progress: 0.75,
+            idealLowerProgress: 0.7, idealUpperProgress: 0.8
         ),
         PlantMetric(
             name: "Temperature", systemImage: "thermometer", tint: AppTheme.Colors.sensorTemperature,
-            statusLabel: "Too hot", statusEmoji: "🥵",
-            valueText: "28°C", idealRangeText: "Ideal 18°C - 26°C", progress: 0.9
+            statusLabel: "Too Cold", statusEmoji: "🥶",
+            valueText: "18", idealRangeText: "Ideal 20°C - 26°C", progress: 0.36,
+            idealLowerProgress: 0.4, idealUpperProgress: 0.52
+        ),
+        PlantMetric(
+            name: "Humidity", systemImage: "humidity.fill", tint: AppTheme.Colors.sensorHumidity,
+            statusLabel: "Too Dry", statusEmoji: "😖",
+            valueText: "40", idealRangeText: "Ideal 70% - 80%", progress: 0.4,
+            idealLowerProgress: 0.7, idealUpperProgress: 0.8
+        ),
+        PlantMetric(
+            name: "Moisture", systemImage: "drop.fill", tint: AppTheme.Colors.sensorSoil,
+            statusLabel: "Too Much", statusEmoji: "😧",
+            valueText: "90", idealRangeText: "Ideal 50% - 80%", progress: 0.9,
+            idealLowerProgress: 0.5, idealUpperProgress: 0.8
         ),
     ]
 

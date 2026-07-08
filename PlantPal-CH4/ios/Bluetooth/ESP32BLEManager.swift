@@ -53,6 +53,7 @@ final class ESP32BLEManager: NSObject, ObservableObject {
     @Published private(set) var discoveredDevices: [DiscoveredDevice] = []
     @Published private(set) var phase: ConnectionPhase = .disconnected
     @Published private(set) var connectedDeviceName: String?
+    @Published private(set) var connectedRSSI: Int?
     @Published private(set) var latestReading: SensorReading?
     @Published private(set) var latestReadingError: String?
     @Published private(set) var provisionedBaseURL: URL?
@@ -150,6 +151,10 @@ final class ESP32BLEManager: NSObject, ObservableObject {
         resetConnectionState()
     }
 
+    func refreshSignalStrength() {
+        connectedPeripheral?.readRSSI()
+    }
+
     func forgetPairedDevice() {
         disconnect()
         pairedDeviceIdentifier = nil
@@ -191,6 +196,7 @@ final class ESP32BLEManager: NSObject, ObservableObject {
         sensorReadingCharacteristic = nil
         networkInfoCharacteristic = nil
         connectedDeviceName = nil
+        connectedRSSI = nil
         provisionedBaseURL = nil
         phase = .disconnected
     }
@@ -248,7 +254,12 @@ final class ESP32BLEManager: NSObject, ObservableObject {
 
     private func handleSensorReadingData(_ data: Data) {
         do {
-            latestReading = try SensorReading(wireData: data)
+            let reading = try SensorReading(wireData: data)
+            guard reading.isValid else {
+                latestReadingError = "The sensor sent an incomplete reading. Check the DHT11 wiring and wait for the next live update."
+                return
+            }
+            latestReading = reading
             latestReadingError = nil
         } catch {
             latestReadingError = "Couldn't decode BLE reading: \(error.localizedDescription)"
@@ -315,8 +326,10 @@ extension ESP32BLEManager: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         connectedDeviceName = peripheral.name ?? "Plant Sensor"
+        connectedRSSI = nil
         phase = .discoveringServices
         peripheral.discoverServices([BLEProtocol.serviceUUID])
+        peripheral.readRSSI()
     }
 
     func centralManager(
@@ -468,5 +481,10 @@ extension ESP32BLEManager: CBPeripheralDelegate {
             cancelProvisioningTasks()
             phase = .failed("The sensor couldn't join that Wi-Fi network. Check the password and try again.")
         }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        guard error == nil else { return }
+        connectedRSSI = RSSI.intValue
     }
 }

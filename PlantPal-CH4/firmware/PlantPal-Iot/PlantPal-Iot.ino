@@ -47,9 +47,23 @@ unsigned long lastBleReadingSentAt = 0;
 const int DRY_SOIL = 4095;
 const int WET_SOIL = 1200;
 
-// Light calibration
-const int BRIGHT_LIGHT = 0;
-const int DARK_LIGHT = 4095;
+// Light calibration for the KY-018 on this ESP32-C3 setup.
+// The raw ADC value rises as the room gets brighter, so the app-facing
+// percentage should rise with it too: dark = 0%, bright = 100%.
+const int DARK_LIGHT = 0;
+const int BRIGHT_LIGHT = 4095;
+
+const unsigned long DHT_SAMPLE_INTERVAL_MS = 2000;
+float cachedTemperature = NAN;
+float cachedHumidity = NAN;
+bool hasTemperatureReading = false;
+bool hasHumidityReading = false;
+unsigned long lastDhtReadAt = 0;
+
+int cachedSoilRaw = 0;
+int cachedLightRaw = 0;
+int cachedSoilPercent = 0;
+int cachedLightPercent = 0;
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
@@ -65,6 +79,8 @@ String extractJsonString(const String& json, const String& key);
 String getSensorReadingJson();
 String getNetworkInfoJson();
 String getISODateTimeString(const RtcDateTime& dt);
+void updateSensorCache(bool forceDht);
+String formatFloatOrNull(float value, int decimals);
 
 class PlantPalServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer* server) {
@@ -119,6 +135,8 @@ void setup() {
 
   // Start sensors
   dht.begin();
+  delay(1500);
+  updateSensorCache(true);
 
   // Start RTC
   rtc.Begin();
@@ -154,9 +172,10 @@ void setup() {
 }
 
 void loop() {
+  updateSensorCache(false);
   server.handleClient();
 
-  if (bleClientConnected && millis() - lastBleReadingSentAt > 2000) {
+  if (bleClientConnected && millis() - lastBleReadingSentAt > 1000) {
     sendSensorReadingOverBLE();
     lastBleReadingSentAt = millis();
   }
@@ -339,17 +358,7 @@ String extractJsonString(const String& json, const String& key) {
 }
 
 void handleRoot() {
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
-
-  int soilValue = analogRead(SOIL_PIN);
-  int lightValue = analogRead(LIGHT_PIN);
-
-  int soilPercent = map(soilValue, DRY_SOIL, WET_SOIL, 0, 100);
-  soilPercent = constrain(soilPercent, 0, 100);
-
-  int lightPercent = map(lightValue, BRIGHT_LIGHT, DARK_LIGHT, 100, 0);
-  lightPercent = constrain(lightPercent, 0, 100);
+  updateSensorCache(false);
 
   RtcDateTime now = rtc.GetDateTime();
 
@@ -376,27 +385,27 @@ void handleRoot() {
   html += "</p>";
 
   html += "<p><b>Temperature:</b> ";
-  html += String(temperature);
+  html += hasTemperatureReading ? String(cachedTemperature, 1) : "Waiting for DHT";
   html += " &deg;C</p>";
 
   html += "<p><b>Humidity:</b> ";
-  html += String(humidity);
+  html += hasHumidityReading ? String(cachedHumidity, 1) : "Waiting for DHT";
   html += " %</p>";
 
   html += "<p><b>Soil Raw:</b> ";
-  html += String(soilValue);
+  html += String(cachedSoilRaw);
   html += "</p>";
 
   html += "<p><b>Soil Moisture:</b> ";
-  html += String(soilPercent);
+  html += String(cachedSoilPercent);
   html += " %</p>";
 
   html += "<p><b>Light Raw:</b> ";
-  html += String(lightValue);
+  html += String(cachedLightRaw);
   html += "</p>";
 
   html += "<p><b>Light Level:</b> ";
-  html += String(lightPercent);
+  html += String(cachedLightPercent);
   html += " %</p>";
 
   html += "<p><small>Auto-refreshes every 2 seconds</small></p>";
@@ -411,34 +420,68 @@ void handleData() {
   server.send(200, "application/json", getSensorReadingJson());
 }
 
-String getSensorReadingJson() {
+void updateSensorCache(bool forceDht) {
+  cachedSoilRaw = analogRead(SOIL_PIN);
+  cachedLightRaw = analogRead(LIGHT_PIN);
+
+  cachedSoilPercent = map(cachedSoilRaw, DRY_SOIL, WET_SOIL, 0, 100);
+  cachedSoilPercent = constrain(cachedSoilPercent, 0, 100);
+
+  cachedLightPercent = map(cachedLightRaw, DARK_LIGHT, BRIGHT_LIGHT, 0, 100);
+  cachedLightPercent = constrain(cachedLightPercent, 0, 100);
+
+  unsigned long now = millis();
+  bool shouldReadDht = forceDht
+    || lastDhtReadAt == 0
+    || now - lastDhtReadAt >= DHT_SAMPLE_INTERVAL_MS;
+
+  if (!shouldReadDht) {
+    return;
+  }
+
+  lastDhtReadAt = now;
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
 
-  if (isnan(humidity)) {
-    humidity = 0;
-  }
-  if (isnan(temperature)) {
-    temperature = 0;
+  if (!isnan(humidity)) {
+    cachedHumidity = humidity;
+    hasHumidityReading = true;
   }
 
-  int soilValue = analogRead(SOIL_PIN);
-  int lightValue = analogRead(LIGHT_PIN);
+  if (!isnan(temperature)) {
+    cachedTemperature = temperature;
+    hasTemperatureReading = true;
+  }
 
-  int soilPercent = map(soilValue, DRY_SOIL, WET_SOIL, 0, 100);
-  soilPercent = constrain(soilPercent, 0, 100);
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("DHT read failed; keeping the last valid temperature/humidity.");
+  }
+}
 
-  int lightPercent = map(lightValue, BRIGHT_LIGHT, DARK_LIGHT, 100, 0);
-  lightPercent = constrain(lightPercent, 0, 100);
+String formatFloatOrNull(float value, int decimals) {
+  if (isnan(value)) {
+    return "null";
+  }
+
+  return String(value, decimals);
+}
+
+String getSensorReadingJson() {
+  updateSensorCache(false);
 
   RtcDateTime now = rtc.GetDateTime();
 
   String json = "{";
+  json += "\"firmware_version\":2,";
   json += "\"rtc_timestamp\":\"" + getISODateTimeString(now) + "\",";
-  json += "\"t\":" + String(temperature, 1) + ",";
-  json += "\"h\":" + String(humidity, 1) + ",";
-  json += "\"m\":" + String(soilPercent) + ",";
-  json += "\"l\":" + String(lightPercent);
+  json += "\"t\":" + formatFloatOrNull(cachedTemperature, 1) + ",";
+  json += "\"h\":" + formatFloatOrNull(cachedHumidity, 1) + ",";
+  json += "\"m\":" + String(cachedSoilPercent) + ",";
+  json += "\"l\":" + String(cachedLightPercent) + ",";
+  json += "\"soil_raw\":" + String(cachedSoilRaw) + ",";
+  json += "\"light_raw\":" + String(cachedLightRaw) + ",";
+  json += "\"dht_ok\":";
+  json += (hasTemperatureReading && hasHumidityReading) ? "true" : "false";
   json += "}";
 
   return json;

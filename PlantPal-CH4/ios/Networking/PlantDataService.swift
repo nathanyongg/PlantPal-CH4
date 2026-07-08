@@ -18,14 +18,15 @@ final class PlantDataService {
 
     init(
         baseURL: URL,
-        apiKey: String? = nil
+        apiKey: String? = nil,
+        timeout: TimeInterval = 6
     ) {
         self.baseURL = baseURL
         self.apiKey = apiKey
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 6
-        config.timeoutIntervalForResource = 6
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout
         config.waitsForConnectivity = false
         self.session = URLSession(configuration: config)
     }
@@ -47,7 +48,11 @@ final class PlantDataService {
 
         switch http.statusCode {
         case 200:
-            return try SensorReading(wireData: data)
+            let reading = try SensorReading(wireData: data)
+            guard reading.isValid else {
+                throw PlantDataServiceError.invalidReading
+            }
+            return reading
         case 404:
             throw PlantDataServiceError.noReadingsYet
         case 401, 403:
@@ -85,21 +90,22 @@ final class PlantDataService {
         }
         let wireReadings = try decoder.decode([WireReading].self, from: data)
 
-        return wireReadings.map {
-            SensorReading(
+        return wireReadings.compactMap {
+            let reading = SensorReading(
                 timestamp: $0.timestamp,
                 temperature: $0.t,
                 humidity: $0.h,
                 soilMoisture: $0.m,
                 lightIntensity: $0.l
             )
+            return reading.isValid ? reading : nil
         }
     }
 }
 
 extension PlantDataService {
 
-    convenience init(profile: PlantProfile) throws {
+    convenience init(profile: PlantProfile, timeout: TimeInterval = 6) throws {
         guard
             let rawURL = profile.sensorBaseURL,
             let url = URL(string: rawURL)
@@ -107,7 +113,7 @@ extension PlantDataService {
             throw PlantDataServiceError.sensorNotConfigured
         }
 
-        self.init(baseURL: url)
+        self.init(baseURL: url, timeout: timeout)
     }
 }
 
@@ -118,6 +124,7 @@ extension PlantDataService {
 enum PlantDataServiceError: LocalizedError {
     case sensorNotConfigured
     case invalidResponse
+    case invalidReading
     case noReadingsYet
     case unauthorized
     case serverError(Int)
@@ -128,6 +135,8 @@ enum PlantDataServiceError: LocalizedError {
             return "This plant doesn't have a provisioned Wi-Fi sensor yet."
         case .invalidResponse:
             return "Couldn't reach the plant sensor service."
+        case .invalidReading:
+            return "The sensor sent an incomplete reading. Check the DHT11 wiring and wait for the next live update."
         case .noReadingsYet:
             return "Your ESP32 hasn't sent any readings yet. Check it's powered on and connected to WiFi."
         case .unauthorized:
