@@ -47,7 +47,7 @@ struct PlantCardView: View {
 
                     Spacer(minLength: 8)
 
-                    Text(lastCheckedText)
+                    Text("Last Updated: \(lastCheckedText)")
                         .font(AppTheme.Typography.caption)
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                 }

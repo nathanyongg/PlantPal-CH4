@@ -39,7 +39,6 @@ struct DashboardView: View {
     @State private var selectedPlant: PlantProfile?
     @State private var editingPlant: PlantProfile?
     @State private var showingSettings = false
-    @State private var showingDevicePairing = false
     @State private var showingConnectDevice = false
     @State private var pendingDevice: ESP32BLEManager.ProvisionedDevice?
 
@@ -100,9 +99,6 @@ struct DashboardView: View {
             }
             .navigationDestination(isPresented: $showingSettings) {
                 SettingsView()
-            }
-            .sheet(isPresented: $showingDevicePairing) {
-                DevicePairingView()
             }
             .fullScreenCover(isPresented: $showingConnectDevice) {
                 ConnectDeviceView(

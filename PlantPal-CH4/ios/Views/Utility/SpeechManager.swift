@@ -28,7 +28,7 @@ final class SpeechManager {
     private init() {}
 
     private var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: "spokenAnnouncements") as? Bool ?? true
+        UserDefaults.standard.object(forKey: "spokenAnnouncements") as? Bool ?? false
     }
 
     func speak(_ text: String) {

@@ -89,11 +89,11 @@ struct OnboardingView: View {
             }
             .background(AppTheme.Colors.onboardingAccent, in: Capsule())
 
-            pageDots(
-                activeColor: AppTheme.Colors.onboardingAccent,
-                inactiveColor: AppTheme.Colors.onboardingAccent.opacity(0.35),
-                activeIndex: 0
-            )
+//            pageDots(
+//                activeColor: AppTheme.Colors.onboardingAccent,
+//                inactiveColor: AppTheme.Colors.onboardingAccent.opacity(0.35),
+//                activeIndex: 0
+//            )
                 .padding(.top, 16)
 
             Spacer(minLength: 20)
