@@ -29,9 +29,13 @@ struct PlantDetailView: View {
 
     @State private var isChecking = false
     @State private var checkErrorMessage: String?
-    @State private var didFetchFreshReading = false
-    @State private var lastRenderedReadingFingerprint: String?
 
+    // Foundation Model calls only ever happen from an explicit user
+    // action — pull-to-refresh or the header's refresh button, both of
+    // which call `performCheck()` directly. Opening the screen just
+    // shows whatever was last recorded; it never triggers a fresh
+    // check or FM call on its own, and live BLE readings arriving in
+    // the background don't either.
     var body: some View {
         mainContent
             .background(AppBackground { Color.clear })
@@ -48,16 +52,7 @@ struct PlantDetailView: View {
                         nickname: profile.nickname,
                         imageData: profile.imageData
                     )
-                    renderLatestBLEReadingIfAvailable()
-                    if !didFetchFreshReading {
-                        didFetchFreshReading = true
-                        await performCheck()
-                    }
                 }
-            }
-            .onChange(of: ble.latestReading) { _, reading in
-                guard let reading, !isChecking else { return }
-                renderIfChanged(reading: reading, shouldRecord: false)
             }
     }
 
@@ -73,7 +68,6 @@ struct PlantDetailView: View {
         isChecking = true
         checkErrorMessage = nil
         do {
-            renderLatestBLEReadingIfAvailable()
             let freshReading = try await fetchLatestReading()
             render(reading: freshReading, shouldRecord: true)
         } catch {
@@ -89,26 +83,6 @@ struct PlantDetailView: View {
 
     private func fetchLatestReading() async throws -> SensorReading {
         try await PlantDataService(profile: profile).fetchLatestReading()
-    }
-
-    private func renderLatestBLEReadingIfAvailable() {
-        guard let reading = ble.latestReading else { return }
-        renderIfChanged(reading: reading, shouldRecord: false)
-    }
-
-    private func renderIfChanged(reading: SensorReading, shouldRecord: Bool) {
-        let fingerprint = [
-            Int(reading.temperature.rounded()),
-            Int(reading.humidity.rounded()),
-            Int(reading.soilMoisture.rounded()),
-            Int(reading.lightIntensity.rounded())
-        ]
-        .map(String.init)
-        .joined(separator: "-")
-
-        guard shouldRecord || fingerprint != lastRenderedReadingFingerprint else { return }
-        lastRenderedReadingFingerprint = fingerprint
-        render(reading: reading, shouldRecord: shouldRecord)
     }
 
     private func render(reading: SensorReading, shouldRecord: Bool) {
