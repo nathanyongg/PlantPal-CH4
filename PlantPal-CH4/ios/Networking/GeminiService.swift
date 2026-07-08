@@ -42,11 +42,12 @@ actor GeminiService {
           "maxHumidityPercent": <number as percentage 0-100>,
           "minSoilMoisturePercent": <number as percentage 0-100>,
           "maxSoilMoisturePercent": <number as percentage 0-100>,
-          "minLightLux": <number in lux>,
-          "maxLightLux": <number in lux>
+          "minLightLux": <number as light percentage 0-100>,
+          "maxLightLux": <number as light percentage 0-100>
         }
 
-        Use the midpoint of healthy ranges. If the plant is unknown, use
+        Treat light as the app's calibrated light level percentage, where
+        0 is dark and 100 is very bright. If the plant is unknown, use
         average tropical houseplant values as a safe fallback.
         """
     }

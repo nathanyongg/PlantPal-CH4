@@ -101,7 +101,7 @@ struct PlantHealthLogView: View {
     }
 
     private func summary(for entry: PlantHealthLogEntry) -> String {
-        "\(Int(entry.temperature))°C · \(Int(entry.humidity))% humidity · \(Int(entry.soilMoisture))% soil · \(Int(entry.lightIntensity)) lux"
+        "\(Int(entry.temperature))°C · \(Int(entry.humidity))% humidity · \(Int(entry.soilMoisture))% soil · \(Int(entry.lightIntensity))% light"
     }
 
     private func statusLabel(for level: AlertLevel) -> String {
@@ -135,14 +135,14 @@ struct PlantHealthLogView: View {
             minTemperatureC: 18, maxTemperatureC: 26,
             minHumidityPercent: 40, maxHumidityPercent: 80,
             minSoilMoisturePercent: 50, maxSoilMoisturePercent: 80,
-            minLightLux: 10_000, maxLightLux: 25_000
+            minLightLux: 40, maxLightLux: 80
         )
     )
     container.mainContext.insert(monstera)
 
     container.mainContext.insert(PlantHealthLogEntry(
         timestamp: Date(),
-        reading: SensorReading(timestamp: Date(), temperature: 28, humidity: 60, soilMoisture: 10, lightIntensity: 18_000),
+        reading: SensorReading(timestamp: Date(), temperature: 28, humidity: 60, soilMoisture: 10, lightIntensity: 60),
         status: "warning",
         plant: monstera
     ))

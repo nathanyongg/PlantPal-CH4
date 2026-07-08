@@ -15,7 +15,7 @@ struct ConnectDeviceView: View {
     /// Device IDs already linked to other plants — never offered here,
     /// since each device may only belong to one plant at a time.
     var excludedDeviceIDs: Set<String> = []
-    var onDeviceSelected: (ESP32BLEManager.DiscoveredDevice) -> Void
+    var onDeviceSelected: (ESP32BLEManager.ProvisionedDevice) -> Void
     var onCancel: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -42,10 +42,10 @@ struct ConnectDeviceView: View {
             }
         }
         .sheet(isPresented: $showingDevicePicker) {
-            DevicePairingView(excludedDeviceIDs: excludedDeviceIDs) { device in
+            DevicePairingView(excludedDeviceIDs: excludedDeviceIDs, onProvisioned: { device in
                 showingDevicePicker = false
                 onDeviceSelected(device)
-            }
+            })
         }
     }
 

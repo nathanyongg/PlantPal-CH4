@@ -118,21 +118,22 @@ struct PlantHealthDetector: PlantClassifier, Sendable {
         let level: AlertLevel
         let direction: SensorDirection
         let reason: String
+        let range = profile.thresholds().lightPercentRange
 
-        if value < profile.minLightLux {
+        if value < range.lowerBound {
             level = .warning
             direction = .tooLow
-            reason = "too dim — below \(Int(profile.minLightLux)) lux minimum for \(profile.name)"
-        } else if value > profile.maxLightLux {
+            reason = "too dim — below \(Int(range.lowerBound))% minimum for \(profile.name)"
+        } else if value > range.upperBound {
             level = .warning
             direction = .tooHigh
-            reason = "too bright — above \(Int(profile.maxLightLux)) lux, risk of leaf scorch"
+            reason = "too bright — above \(Int(range.upperBound))%, risk of leaf scorch"
         } else {
             level = .healthy
             direction = .none
-            reason = "within range (\(Int(profile.minLightLux))–\(Int(profile.maxLightLux)) lux)"
+            reason = "within range (\(Int(range.lowerBound))–\(Int(range.upperBound))%)"
         }
 
-        return SensorStatus(name: "Light", value: value, unit: " lux", level: level, direction: direction, reason: reason)
+        return SensorStatus(name: "Light", value: value, unit: "%", level: level, direction: direction, reason: reason)
     }
 }

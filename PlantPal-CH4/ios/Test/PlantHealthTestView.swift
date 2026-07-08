@@ -21,7 +21,7 @@ struct PlantHealthTestView: View {
     @State private var temperature: Double    = 25
     @State private var humidity: Double       = 60
     @State private var soilMoisture: Double   = 45
-    @State private var lightIntensity: Double = 18_000
+    @State private var lightIntensity: Double = 60
 
     // MARK: — Pipeline state
 
@@ -113,10 +113,10 @@ struct PlantHealthTestView: View {
                 format: "%.0f"
             )
             sliderRow(
-                label: "Light intensity",
+                label: "Light",
                 value: $lightIntensity,
-                range: 0...35_000,
-                unit: " lux",
+                range: 0...100,
+                unit: "%",
                 format: "%.0f"
             )
         }
@@ -154,27 +154,27 @@ struct PlantHealthTestView: View {
                 HStack(spacing: 10) {
                     presetChip("Healthy", color: .green) {
                         temperature = 24; humidity = 60
-                        soilMoisture = 50; lightIntensity = 18_000
+                        soilMoisture = 50; lightIntensity = 60
                     }
                     presetChip("Dry soil", color: .orange) {
                         temperature = 26; humidity = 55
-                        soilMoisture = 12; lightIntensity = 17_000
+                        soilMoisture = 12; lightIntensity = 55
                     }
                     presetChip("Overwatered", color: .blue) {
                         temperature = 22; humidity = 70
-                        soilMoisture = 92; lightIntensity = 16_000
+                        soilMoisture = 92; lightIntensity = 55
                     }
                     presetChip("Heat stress", color: .red) {
                         temperature = 38; humidity = 30
-                        soilMoisture = 40; lightIntensity = 26_000
+                        soilMoisture = 40; lightIntensity = 70
                     }
                     presetChip("Too dark", color: .purple) {
                         temperature = 23; humidity = 58
-                        soilMoisture = 48; lightIntensity = 3_000
+                        soilMoisture = 48; lightIntensity = 10
                     }
                     presetChip("Multiple issues", color: .red) {
                         temperature = 36; humidity = 28
-                        soilMoisture = 15; lightIntensity = 4_000
+                        soilMoisture = 15; lightIntensity = 15
                     }
                 }
             }
@@ -360,7 +360,7 @@ struct PlantHealthTestView: View {
                 minTemperatureC: 18,  maxTemperatureC: 30,
                 minHumidityPercent:    40,  maxHumidityPercent:    80,
                 minSoilMoisturePercent: 30, maxSoilMoisturePercent: 70,
-                minLightLux:    10_000, maxLightLux:    25_000
+                minLightLux:    40, maxLightLux:    80
             )
         )
 

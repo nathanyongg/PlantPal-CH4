@@ -24,34 +24,64 @@ struct PlantPalApp: App {
     // modifier) so AutoRefreshScheduler can share the exact same
     // container the UI observes — its background checks need to land
     // in the same store Collections/Detail are querying.
-    private let sharedModelContainer: ModelContainer = {
-        try! ModelContainer(for: PlantProfile.self, PlantHealthLogEntry.self)
-    }()
+    private let modelContainerResult: Result<ModelContainer, Error> = Result {
+        try ModelContainer(for: PlantProfile.self, PlantHealthLogEntry.self)
+    }
 
     init() {
-        // Must be registered before the app finishes launching.
-        AutoRefreshScheduler.shared.registerBackgroundTask()
+        if case .success = modelContainerResult {
+            // Must be registered before the app finishes launching.
+            AutoRefreshScheduler.shared.registerBackgroundTask()
+        }
     }
 
     var body: some Scene {
 
         WindowGroup {
-            Group {
-                if hasCompletedOnboarding {
-                    RootTabView()
-                } else {
-                    OnboardingView {
-                        hasCompletedOnboarding = true
+            switch modelContainerResult {
+            case .success(let sharedModelContainer):
+                Group {
+                    if hasCompletedOnboarding {
+                        RootTabView()
+                    } else {
+                        OnboardingView {
+                            hasCompletedOnboarding = true
+                        }
                     }
                 }
-            }
-            .preferredColorScheme(appearance.colorScheme)
-            .appTextSize(textSize)
-            .modelContainer(sharedModelContainer)
-            .task {
-                AutoRefreshScheduler.shared.start(with: sharedModelContainer)
-                AutoRefreshScheduler.shared.scheduleBackgroundRefresh()
+                .preferredColorScheme(appearance.colorScheme)
+                .appTextSize(textSize)
+                .modelContainer(sharedModelContainer)
+                .task {
+                    AutoRefreshScheduler.shared.start(with: sharedModelContainer)
+                    AutoRefreshScheduler.shared.scheduleBackgroundRefresh()
+                }
+
+            case .failure(let error):
+                StartupFailureView(error: error)
             }
         }
+    }
+}
+
+private struct StartupFailureView: View {
+
+    let error: Error
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.orange)
+
+            Text("PlantPal couldn't start")
+                .font(.title2.bold())
+
+            Text(error.localizedDescription)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(28)
     }
 }

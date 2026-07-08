@@ -17,9 +17,10 @@ struct DevicePairingView: View {
     /// plants can't end up sharing one sensor.
     var excludedDeviceIDs: Set<String> = []
 
-    /// When set, this becomes a picker: tapping a device reports the
-    /// pick and dismisses, skipping the connect/Wi-Fi flow below.
+    /// When set, the user can continue into Add Plant after Wi-Fi
+    /// provisioning succeeds and the ESP32 reports its HTTP endpoint.
     var onSelect: ((ESP32BLEManager.DiscoveredDevice) -> Void)? = nil
+    var onProvisioned: ((ESP32BLEManager.ProvisionedDevice) -> Void)? = nil
 
     @StateObject private var ble = ESP32BLEManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +28,7 @@ struct DevicePairingView: View {
     @State private var ssid = ""
     @State private var password = ""
 
-    private var isSelectionMode: Bool { onSelect != nil }
+    private var isSelectionMode: Bool { onSelect != nil && onProvisioned == nil }
 
     private var visibleDevices: [ESP32BLEManager.DiscoveredDevice] {
         ble.discoveredDevices.filter { !excludedDeviceIDs.contains($0.id.uuidString) }
@@ -108,20 +109,10 @@ struct DevicePairingView: View {
             wifiForm
 
         case .sendingCredentials, .awaitingResult:
-            statusMessage(
-                icon: "wifi",
-                title: "Setting Up Wi-Fi…",
-                message: "Waiting for the sensor to join \"\(ssid)\".",
-                showsSpinner: true
-            )
+            provisioningProgressView
 
         case .provisioned:
-            statusMessage(
-                icon: "checkmark.circle.fill",
-                title: "Sensor Connected!",
-                message: "Your plant sensor is on Wi-Fi and ready to take readings.",
-                tint: AppTheme.Colors.success
-            )
+            provisionedView
 
         case .failed(let message):
             failureView(message)
@@ -273,7 +264,7 @@ struct DevicePairingView: View {
                     readingMetric("Temp", value: "\(Int(reading.temperature.rounded()))°C", icon: "thermometer")
                     readingMetric("Humidity", value: "\(Int(reading.humidity.rounded()))%", icon: "humidity.fill")
                     readingMetric("Soil", value: "\(Int(reading.soilMoisture.rounded()))%", icon: "drop.fill")
-                    readingMetric("Light", value: "\(Int(reading.lightIntensity.rounded())) lux", icon: "sun.max.fill")
+                    readingMetric("Light", value: "\(Int(reading.lightIntensity.rounded()))%", icon: "sun.max.fill")
                 }
 
                 Text("Updated \(reading.formattedTimestamp)")
@@ -318,6 +309,38 @@ struct DevicePairingView: View {
 
     // MARK: — Failure
 
+    private var provisioningProgressView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            ProgressView()
+
+            Image(systemName: "wifi")
+                .font(.system(size: 44))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+
+            Text("Setting Up Wi-Fi…")
+                .font(AppTheme.Typography.sectionTitle)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+
+            Text("Waiting for the sensor to join \"\(ssid)\". Use a 2.4 GHz Wi-Fi network, not the sensor's own PlantPal access point.")
+                .font(AppTheme.Typography.subtitle)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Button("Cancel") {
+                ble.cancelProvisioning()
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+
+            Spacer()
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func failureView(_ message: String) -> some View {
         VStack(spacing: 16) {
             Spacer()
@@ -342,6 +365,60 @@ struct DevicePairingView: View {
             Spacer()
             Spacer()
         }
+    }
+
+    private var provisionedView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(AppTheme.Colors.success)
+
+            Text("Sensor Connected!")
+                .font(AppTheme.Typography.sectionTitle)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+
+            Text("Your plant sensor is on Wi-Fi and ready to send readings to PlantPal.")
+                .font(AppTheme.Typography.subtitle)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            if let url = ble.provisionedBaseURL {
+                Text(url.absoluteString)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.Colors.surface, in: Capsule())
+            }
+
+            if let onProvisioned, let url = ble.provisionedBaseURL {
+                Button {
+                    onProvisioned(ESP32BLEManager.ProvisionedDevice(
+                        id: ble.connectedPeripheralIdentifier ?? UUID(),
+                        name: ble.connectedDeviceName ?? "Plant Sensor",
+                        baseURL: url
+                    ))
+                } label: {
+                    Text("Continue")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 54)
+                }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .tint(AppTheme.Colors.secondaryAccent)
+                .padding(.horizontal, 32)
+            }
+
+            Spacer()
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: — Generic status message

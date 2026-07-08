@@ -41,7 +41,7 @@ struct DashboardView: View {
     @State private var showingSettings = false
     @State private var showingDevicePairing = false
     @State private var showingConnectDevice = false
-    @State private var pendingDevice: ESP32BLEManager.DiscoveredDevice?
+    @State private var pendingDevice: ESP32BLEManager.ProvisionedDevice?
 
     /// Devices already dedicated to an existing plant — each plant needs
     /// its own sensor, so these are never offered again during pairing.
@@ -87,7 +87,8 @@ struct DashboardView: View {
             .navigationDestination(isPresented: $navigateToAddPlant) {
                 PlantSetupView(
                     preselectedDeviceID: pendingDevice?.id.uuidString,
-                    preselectedDeviceName: pendingDevice?.name
+                    preselectedDeviceName: pendingDevice?.name,
+                    preselectedSensorBaseURL: pendingDevice?.baseURL.absoluteString
                 )
             }
             .navigationDestination(item: $selectedPlant) { plant in
@@ -274,8 +275,8 @@ extension DashboardView {
             maxHumidityPercent: 80,
             minSoilMoisturePercent: 40,
             maxSoilMoisturePercent: 70,
-            minLightLux: 10000,
-            maxLightLux: 25000
+            minLightLux: 40,
+            maxLightLux: 80
         )
     )
     monstera.lastStatus = "critical"
@@ -290,8 +291,8 @@ extension DashboardView {
             maxHumidityPercent: 70,
             minSoilMoisturePercent: 30,
             maxSoilMoisturePercent: 60,
-            minLightLux: 5000,
-            maxLightLux: 20000
+            minLightLux: 25,
+            maxLightLux: 70
         )
     )
     pothos.lastStatus = "warning"
@@ -306,8 +307,8 @@ extension DashboardView {
             maxHumidityPercent: 40,
             minSoilMoisturePercent: 5,
             maxSoilMoisturePercent: 20,
-            minLightLux: 20000,
-            maxLightLux: 50000
+            minLightLux: 65,
+            maxLightLux: 100
         )
     )
     cactus.lastStatus = "healthy"

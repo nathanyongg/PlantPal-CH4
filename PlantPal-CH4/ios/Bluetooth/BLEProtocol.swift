@@ -32,6 +32,10 @@ enum BLEProtocol {
     /// Notify + read. The ESP32 sends compact SensorReading JSON here.
     static let sensorReadingCharacteristicUUID = CBUUID(string: "7E570004-0000-1000-8000-00805F9B34FB")
 
+    /// Notify + read. After Wi-Fi provisioning succeeds, ESP32 sends
+    /// {"base_url":"http://192.168.1.23","data_url":"http://192.168.1.23/latest"}.
+    static let networkInfoCharacteristicUUID = CBUUID(string: "7E570005-0000-1000-8000-00805F9B34FB")
+
     // MARK: — Payload
 
     struct WiFiCredentials: Encodable {
@@ -43,6 +47,18 @@ enum BLEProtocol {
         /// 150–185 bytes) for realistic SSID/password lengths.
         func encoded() throws -> Data {
             try JSONEncoder().encode(self)
+        }
+    }
+
+    struct NetworkInfo: Decodable {
+        let ip: String?
+        let baseURL: URL
+        let dataURL: URL?
+
+        private enum CodingKeys: String, CodingKey {
+            case ip
+            case baseURL = "base_url"
+            case dataURL = "data_url"
         }
     }
 
