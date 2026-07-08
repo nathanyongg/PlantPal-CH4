@@ -16,19 +16,18 @@ struct SettingsView: View {
     private var appearance: Appearance = .system
 
     @AppStorage("spokenAnnouncements")
-    private var spokenAnnouncements = true
+    private var spokenAnnouncements = false
 
     @AppStorage("notificationsEnabled")
-    private var notificationsEnabled = true
+    private var notificationsEnabled = false
 
     @AppStorage("criticalAlerts")
-    private var criticalAlerts = true
+    private var criticalAlerts = false
 
     @AppStorage("dailyReminder")
-    private var dailyReminder = true
+    private var dailyReminder = false
 
-    @StateObject private var ble = ESP32BLEManager.shared
-    @State private var showingDevicePairing = false
+    @State private var showingPairedDevices = false
 
     var body: some View {
         AppBackground {
@@ -37,14 +36,12 @@ struct SettingsView: View {
                 Section {
 
                     Button {
-                        showingDevicePairing = true
+                        showingPairedDevices = true
                     } label: {
                         HStack {
-                            Text("Plant Sensor")
+                            Text("Paired Devices")
                                 .foregroundStyle(AppTheme.Colors.textPrimary)
                             Spacer()
-                            Text(ble.hasPairedDevice ? "Paired" : "Not Paired")
-                                .foregroundStyle(AppTheme.Colors.textSecondary)
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundStyle(AppTheme.Colors.textSecondary)
@@ -53,7 +50,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Device")
                 } footer: {
-                    Text("Each plant gets its own sensor, so it can be checked automatically — no need to move anything between plants.")
+                    Text("Each plant gets its own sensor. See which sensor is attached to which plant, or remove a pairing here.")
                 }
 
                 Section {
@@ -144,8 +141,8 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .toolbarBackground(.clear, for: .navigationBar)
-        .sheet(isPresented: $showingDevicePairing) {
-            DevicePairingView()
+        .navigationDestination(isPresented: $showingPairedDevices) {
+            PairedDevicesView()
         }
     }
 }

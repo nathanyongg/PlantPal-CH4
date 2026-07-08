@@ -476,11 +476,6 @@ struct PlantSetupView: View {
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .accessibilityLabel("Nickname")
-
-                    Image(systemName: "leaf.fill")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.Colors.success)
-                        .accessibilityHidden(true)
                 }
             }
 
@@ -529,25 +524,23 @@ struct PlantSetupView: View {
                 await setupPlant()
             }
         } label: {
-            HStack(spacing: 10) {
-                if isLoading {
-                    ProgressView()
-                        .tint(.white)
-                }
-
-                Text(
-                    isLoading
-                        ? "Saving…"
-                        : (editingProfile == nil ? "Save" : "Save Changes")
-                )
-                .font(.headline)
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
             }
-            .foregroundStyle(.white)
+
+            Text(
+                isLoading
+                    ? "Saving…"
+                    : (editingProfile == nil ? "Save" : "Save Changes")
+            )
+            .font(.headline)
+            .foregroundStyle(AppTheme.Colors.secondaryAccent)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 56)
         }
         .buttonStyle(.plain)
-        .background(AppTheme.Colors.secondaryAccent, in: Capsule())
+        .background(Color.white, in: Capsule())
         .appOutline(Capsule(), colorScheme: colorScheme)
         .contentShape(Capsule())
         .opacity(isSaveDisabled ? 0.5 : 1)
