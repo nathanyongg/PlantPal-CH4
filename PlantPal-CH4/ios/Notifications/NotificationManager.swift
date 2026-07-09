@@ -111,7 +111,7 @@ final class NotificationManager: NSObject, ObservableObject {
 
         await add(
             content: content,
-            identifier: "plantpal.health.\(plantID ?? UUID().uuidString)"
+            identifier: "plantpal.health.\(plantID ?? "unknown").\(UUID().uuidString)"
         )
     }
 
@@ -180,6 +180,23 @@ final class NotificationManager: NSObject, ObservableObject {
         } catch {
             remoteRegistrationError = error.localizedDescription
         }
+    }
+
+    private static func makeAttachmentFromBundledImage(named name: String) -> UNNotificationAttachment? {
+        #if os(iOS)
+        guard let image = UIImage(named: name), let data = image.pngData() else { return nil }
+        let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let fileURL = tmpDir.appendingPathComponent("\(UUID().uuidString).png")
+        do {
+            try data.write(to: fileURL)
+            let attachment = try UNNotificationAttachment(identifier: name, url: fileURL, options: nil)
+            return attachment
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
     }
 
     private func registerCategories() {

@@ -228,11 +228,26 @@ struct PlantDetailView: View {
         )
         modelContext.insert(entry)
 
-        updateLastKnownReading(reading: reading, status: status, entry: entry)
+        updateLastKnownReading(reading: reading, status: status)
+
+        Task {
+            try? await FirestoreService.shared.uploadPlant(profile)
+            try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
+        }
     }
 
     private func updateLastKnownReading(reading: SensorReading, status: String? = nil, entry: PlantHealthLogEntry? = nil) {
         let level = viewModel.lastDetectionLevel ?? .healthy
+
+        Task {
+            await PlantHealthMonitor.shared.notifyForSensorLevelChanges(
+                reading: reading,
+                profile: profile
+            )
+            try? modelContext.save()
+            try? await FirestoreService.shared.uploadPlant(profile)
+        }
+
         profile.lastReadingAt = reading.timestamp
         profile.lastStatus = status ?? (level == .critical ? "critical" : level == .warning ? "warning" : "healthy")
         profile.lastTemperatureC = reading.temperature

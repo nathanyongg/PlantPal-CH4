@@ -57,6 +57,11 @@ final class PlantHealthMonitor {
         }
 
         let statuses  = detector.assess(reading, for: profile)
+        
+        if notifyIfUnhealthy {
+            await notifyForSensorLevelChanges(statuses: statuses, profile: profile)
+        }
+        
         let detection = DetectionResult(timestamp: reading.timestamp, statuses: statuses)
         let status = detection.overallLevel == .critical ? "critical"
                    : detection.overallLevel == .warning  ? "warning"
@@ -77,6 +82,14 @@ final class PlantHealthMonitor {
         profile.lastSoilMoisturePercent = reading.soilMoisture
         profile.lastLightLux           = reading.lightIntensity
 
+//        let previousStatus = profile.lastStatus
+//        
+//        profile.lastStatus = newStatus
+//        
+//        if previousStatus != newstatus {
+//
+//        }
+        
         try? modelContext.save()
         try? await FirestoreService.shared.uploadPlant(profile)
         try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
@@ -137,5 +150,103 @@ final class PlantHealthMonitor {
             body: detection.issuesSummary.replacingOccurrences(of: "- ", with: ""),
             isCritical: detection.overallLevel == .critical
         )
+    }
+
+    func notifyForSensorLevelChanges(
+        reading: SensorReading,
+        profile: PlantProfile
+    ) async {
+        let statuses = detector.assess(reading, for: profile)
+        await notifyForSensorLevelChanges(statuses: statuses, profile: profile)
+    }
+    
+    func notifyForSensorLevelChanges(
+        statuses: [SensorStatus],
+        profile: PlantProfile
+    ) async {
+        for sensorStatus in statuses {
+            let previous = previousLevel(
+                for: sensorStatus.name,
+                profile: profile
+            )
+
+            guard previous != sensorStatus.level else { continue }
+
+            switch sensorStatus.direction {
+            case .tooLow:
+                await NotificationManager.shared.schedulePlantHealthAlert(
+                    title: "\(profile.nickname): \(sensorStatus.name) is too low",
+                    body: sensorStatus.reason,
+                    isCritical: sensorStatus.level == .critical,
+                    plantID: profile.cloudID
+                )
+
+            case .tooHigh:
+                await NotificationManager.shared.schedulePlantHealthAlert(
+                    title: "\(profile.nickname): \(sensorStatus.name) is too high",
+                    body: sensorStatus.reason,
+                    isCritical: sensorStatus.level == .critical,
+                    plantID: profile.cloudID
+                )
+
+            case .none:
+                break
+            }
+
+            saveLevel(
+                sensorStatus.level,
+                for: sensorStatus.name,
+                profile: profile
+            )
+        }
+    }
+    
+    private func previousLevel(
+        for sensor: String,
+        profile: PlantProfile
+    ) -> AlertLevel {
+
+        switch sensor {
+
+        case "Temperature":
+            return AlertLevel(rawValue: profile.lastTemperatureLevel) ?? .healthy
+
+        case "Humidity":
+            return AlertLevel(rawValue: profile.lastHumidityLevel) ?? .healthy
+
+        case "Soil moisture":
+            return AlertLevel(rawValue: profile.lastSoilLevel) ?? .healthy
+
+        case "Light":
+            return AlertLevel(rawValue: profile.lastLightLevel) ?? .healthy
+
+        default:
+            return .healthy
+        }
+    }
+    
+    private func saveLevel(
+        _ level: AlertLevel,
+        for sensor: String,
+        profile: PlantProfile
+    ) {
+
+        switch sensor {
+
+        case "Temperature":
+            profile.lastTemperatureLevel = level.rawValue
+
+        case "Humidity":
+            profile.lastHumidityLevel = level.rawValue
+
+        case "Soil moisture":
+            profile.lastSoilLevel = level.rawValue
+
+        case "Light":
+            profile.lastLightLevel = level.rawValue
+
+        default:
+            break
+        }
     }
 }
