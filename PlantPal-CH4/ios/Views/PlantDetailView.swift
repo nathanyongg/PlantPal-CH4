@@ -228,10 +228,10 @@ struct PlantDetailView: View {
         )
         modelContext.insert(entry)
 
-        updateLastKnownReading(reading: reading, status: status)
+        updateLastKnownReading(reading: reading, status: status, entry: entry)
     }
 
-    private func updateLastKnownReading(reading: SensorReading, status: String? = nil) {
+    private func updateLastKnownReading(reading: SensorReading, status: String? = nil, entry: PlantHealthLogEntry? = nil) {
         let level = viewModel.lastDetectionLevel ?? .healthy
         profile.lastReadingAt = reading.timestamp
         profile.lastStatus = status ?? (level == .critical ? "critical" : level == .warning ? "warning" : "healthy")
@@ -244,7 +244,9 @@ struct PlantDetailView: View {
             try modelContext.save()
             Task {
                 try? await FirestoreService.shared.uploadPlant(profile)
-                try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
+                if let entry {
+                    try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
+                }
             }
         } catch {
             print("Failed to save check-in:", error)
@@ -272,17 +274,19 @@ struct PlantDetailView: View {
             Button {
                 Task { await performCheck() }
             } label: {
-                Image(systemName: "arrow.trianglehead.counterclockwise")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                    .frame(width: 40, height: 40)
-                    .background(AppTheme.Colors.surface, in: Circle())
-                    .appOutline(Circle(), colorScheme: colorScheme)
-                    .rotationEffect(.degrees(isChecking ? 360 : 0))
-                    .animation(
-                        isChecking ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
-                        value: isChecking
-                    )
+                Group {
+                    if isChecking {
+                        ProgressView()
+                            .tint(AppTheme.Colors.textPrimary)
+                    } else {
+                        Image(systemName: "arrow.trianglehead.counterclockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .background(AppTheme.Colors.surface, in: Circle())
+                .appOutline(Circle(), colorScheme: colorScheme)
             }
             .buttonStyle(PressableButtonStyle())
             .disabled(isChecking || previewCardData != nil)
@@ -673,21 +677,51 @@ struct PlantDetailView: View {
 private struct MetricRow: View {
     let metric: PlantMetric
 
-    private let thumbWidth: CGFloat = 42
-    private let thumbHeight: CGFloat = 22
-    private let trackHeight: CGFloat = 8
+    private let markerWidth: CGFloat = 8
+    private let trackHeight: CGFloat = 22
+
+    /// Only "Perfect" means the reading sits inside its ideal range —
+    /// every other status label ("Too Cold", "Too Dry", "Too Much", …)
+    /// is an out-of-range warning, so the marker reads dark vs. red off
+    /// that single check rather than duplicating the in-range math here.
+    /// In range it's dark rather than green so it stays visible sitting
+    /// on top of the green ideal band instead of blending into it.
+    private var isInRange: Bool {
+        metric.statusLabel == "Perfect"
+    }
+
+    private var markerColor: Color {
+        isInRange ? AppTheme.Colors.textPrimary : AppTheme.Colors.critical
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(metric.valueText)%")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
                 Text(metric.name)
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
+                    .minimumScaleFactor(0.5)
 
                 Spacer(minLength: 8)
+
+                // Protected with layoutPriority so the value/name group on
+                // the left (which has more slack to shrink) gives up space
+                // first — otherwise the status label was the one losing
+                // the fight and getting truncated ("Too Co…") once the
+                // value% prefix made the left side wider.
+                Text(metric.idealRangeText)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(1)
 
                 HStack(spacing: 4) {
                     Text(metric.statusLabel)
@@ -698,24 +732,17 @@ private struct MetricRow: View {
                     Text(metric.statusEmoji)
                         .font(.system(size: 17))
                 }
+                .layoutPriority(1)
             }
-
-            Text(metric.idealRangeText)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 34)
 
             GeometryReader { geo in
                 let valueProgress = min(max(metric.progress, 0), 1)
                 let lowerProgress = min(max(metric.idealLowerProgress, 0), 1)
                 let upperProgress = min(max(metric.idealUpperProgress, 0), 1)
-                let availableWidth = max(geo.size.width - thumbWidth, 1)
-                let thumbX = thumbWidth / 2 + availableWidth * valueProgress
-                let idealStart = thumbWidth / 2 + availableWidth * min(lowerProgress, upperProgress)
-                let idealEnd = thumbWidth / 2 + availableWidth * max(lowerProgress, upperProgress)
+                let availableWidth = max(geo.size.width - markerWidth, 1)
+                let markerX = markerWidth / 2 + availableWidth * valueProgress
+                let idealStart = markerWidth / 2 + availableWidth * min(lowerProgress, upperProgress)
+                let idealEnd = markerWidth / 2 + availableWidth * max(lowerProgress, upperProgress)
 
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -723,18 +750,14 @@ private struct MetricRow: View {
                         .frame(height: trackHeight)
 
                     Capsule()
-                        .fill(metric.tint.opacity(0.92))
-                        .frame(width: max(thumbWidth * 0.45, idealEnd - idealStart), height: trackHeight)
+                        .fill(AppTheme.Colors.leafGreen.opacity(0.85))
+                        .frame(width: max(markerWidth, idealEnd - idealStart), height: trackHeight)
                         .offset(x: idealStart)
 
-                    Text(metric.valueText)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .frame(width: thumbWidth, height: thumbHeight)
-                        .background(metric.tint, in: Capsule())
-                        .position(x: thumbX, y: geo.size.height / 2)
+                    Capsule()
+                        .fill(markerColor)
+                        .frame(width: markerWidth, height: trackHeight)
+                        .position(x: markerX, y: geo.size.height / 2)
                 }
                 .frame(height: geo.size.height, alignment: .bottom)
             }
@@ -794,7 +817,7 @@ final class PlantPipelineViewModel: ObservableObject {
             species: species, nickname: nickname, imageData: imageData,
             mood: mood, moodEmoji: emoji,
             todaysMessage: level == .healthy ? "I'm feeling good today!" : "Something doesn't feel quite right today.",
-            aiInsightTitle: "Last check-in",
+            aiInsightTitle: "It's been a while since you check in",
             aiInsight: "Last checked \(lastReadingAt.formatted(.relative(presentation: .named))). Pull down or tap refresh for a fresh reading.",
             metrics: metrics,
             isGenuineInsight: false

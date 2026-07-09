@@ -213,10 +213,12 @@ struct OnboardingView: View {
                 .disabled(isCompleting)
 
                 // Always present (never removed from the layout) so the
-                // card's height stays identical across all three pages —
-                // only hidden on the last page, instead of disappearing,
-                // to avoid the resize jump that caused a weird shifting
-                // animation when advancing to "Let's Start".
+                // card's height stays identical across every page — only
+                // hidden past the first two, instead of disappearing, to
+                // avoid the resize jump that caused a weird shifting
+                // animation when advancing. Skipping the notification-
+                // permission or final page wouldn't make sense, so Skip
+                // only ever shows on the first two pages.
                 Button {
                     completeOnboarding()
                 } label: {
@@ -226,10 +228,10 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                 }
-                .background(AppTheme.Colors.onboardingAccent, in: Capsule())
-                .opacity(isLastPage ? 0 : 1)
-                .disabled(isLastPage || isCompleting)
-                .accessibilityHidden(isLastPage)
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
+                .opacity(showsSkipButton ? 1 : 0)
+                .disabled(!showsSkipButton || isCompleting)
+                .accessibilityHidden(!showsSkipButton)
             }
 
             pageDots(activeColor: .white, inactiveColor: .white.opacity(0.5), activeIndex: currentPage - 1)
@@ -274,10 +276,23 @@ struct OnboardingView: View {
         currentPage == pages.count
     }
 
+    /// Skipping only makes sense before the pitch is made — once the
+    /// notification-permission page is showing (or it's the final page),
+    /// Skip disappears in favor of Next/Let's Start.
+    private var showsSkipButton: Bool {
+        currentPage == 1 || currentPage == 2
+    }
+
     private func advance() {
         if isLastPage {
             completeOnboarding()
         } else {
+            // `page` is `pages[currentPage - 1]` — currentPage is 0 on the
+            // welcome splash, so it must be excluded here or this indexes
+            // pages[-1] and crashes the moment "Get Started" is tapped.
+            if currentPage >= 1, page.requestsNotificationPermission {
+                Task { _ = await NotificationManager.shared.requestAuthorization() }
+            }
             withAnimation {
                 currentPage += 1
             }
@@ -307,6 +322,7 @@ private struct OnboardingPage {
     let speechBubble: String?
     let title: String
     let subtitle: String
+    var requestsNotificationPermission: Bool = false
 
     static let all: [OnboardingPage] = [
         OnboardingPage(
@@ -320,6 +336,13 @@ private struct OnboardingPage {
             speechBubble: "Hii! 😊",
             title: "Listen to\nyour plant.",
             subtitle: "Real-time environmental data becomes emotions and messages."
+        ),
+        OnboardingPage(
+            mascotImageName: "Mascot 2",
+            speechBubble: "Ding! 🔔",
+            title: "Never miss\na check-in.",
+            subtitle: "Turn on notifications so PlantPal can tell you the moment your plant needs help.",
+            requestsNotificationPermission: true
         ),
         OnboardingPage(
             mascotImageName: "Mascot 2",
