@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		635BB1B42FFE405B00D60EE3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 635BB1B32FFE405B00D60EE3 /* GoogleService-Info.plist */; };
+		635BB1B72FFE43A500D60EE3 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 635BB1B62FFE43A500D60EE3 /* FirebaseCore */; };
+		635BB1B92FFE43A500D60EE3 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 635BB1B82FFE43A500D60EE3 /* FirebaseFirestore */; };
+		635BB1BB2FFE43A500D60EE3 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 635BB1BA2FFE43A500D60EE3 /* FirebaseMessaging */; };
 		6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 6C1481092FF4F34C00A03EA5 /* .gitignore */; };
 		6C14816F2FF4F6B200A03EA5 /* SecretsExample.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */; };
 		6C85CE6D2FFE1BEA0083997B /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */; };
@@ -14,6 +18,7 @@
 
 /* Begin PBXFileReference section */
 		635908242FF39EFB0069A632 /* PlantPal-CH4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PlantPal-CH4.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		635BB1B32FFE405B00D60EE3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		6C1481092FF4F34C00A03EA5 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		6C14816E2FF4F6B200A03EA5 /* SecretsExample.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = SecretsExample.xcconfig; sourceTree = "<group>"; };
 		6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
@@ -45,6 +50,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				635BB1BB2FFE43A500D60EE3 /* FirebaseMessaging in Frameworks */,
+				635BB1B72FFE43A500D60EE3 /* FirebaseCore in Frameworks */,
+				635BB1B92FFE43A500D60EE3 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +67,7 @@
 				6C85CE6C2FFE1BEA0083997B /* Secrets.xcconfig */,
 				635908262FF39EFB0069A632 /* ios */,
 				635908252FF39EFB0069A632 /* Products */,
+				635BB1B32FFE405B00D60EE3 /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,6 +99,9 @@
 			);
 			name = "PlantPal-CH4";
 			packageProductDependencies = (
+				635BB1B62FFE43A500D60EE3 /* FirebaseCore */,
+				635BB1B82FFE43A500D60EE3 /* FirebaseFirestore */,
+				635BB1BA2FFE43A500D60EE3 /* FirebaseMessaging */,
 			);
 			productName = "PlantPal-CH4";
 			productReference = 635908242FF39EFB0069A632 /* PlantPal-CH4.app */;
@@ -132,6 +144,9 @@
 			);
 			mainGroup = 6359081B2FF39EFB0069A632;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				635BB1B52FFE43A500D60EE3 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 635908252FF39EFB0069A632 /* Products */;
 			projectDirPath = "";
@@ -150,6 +165,7 @@
 				6C14816F2FF4F6B200A03EA5 /* SecretsExample.xcconfig in Resources */,
 				6C85CE6D2FFE1BEA0083997B /* Secrets.xcconfig in Resources */,
 				6C14810B2FF4F35300A03EA5 /* .gitignore in Resources */,
+				635BB1B42FFE405B00D60EE3 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,6 +320,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PlantPal;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "PlantPal uses your camera to take a photo of your plant.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "PlantPal uses your photo library so you can choose a photo of your plant.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -315,7 +335,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.PlantPal.test;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Nathan.PlantPal.test1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -340,6 +360,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ios/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PlantPal;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "PlantPal uses your camera to take a photo of your plant.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "PlantPal uses your photo library so you can choose a photo of your plant.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -351,7 +375,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.PlantPal.test;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Nathan.PlantPal.test1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -385,6 +409,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		635BB1B52FFE43A500D60EE3 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		635BB1B62FFE43A500D60EE3 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 635BB1B52FFE43A500D60EE3 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		635BB1B82FFE43A500D60EE3 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 635BB1B52FFE43A500D60EE3 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		635BB1BA2FFE43A500D60EE3 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 635BB1B52FFE43A500D60EE3 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6359081C2FF39EFB0069A632 /* Project object */;
 }

@@ -7,9 +7,13 @@
 
 import SwiftData
 import SwiftUI
+import FirebaseCore
 
 @main
 struct PlantPalApp: App {
+
+    @UIApplicationDelegateAdaptor(NotificationAppDelegate.self)
+    private var notificationAppDelegate
 
     @AppStorage("appearance")
     private var appearance: Appearance = .system
@@ -27,8 +31,11 @@ struct PlantPalApp: App {
     private let modelContainerResult: Result<ModelContainer, Error> = Result {
         try ModelContainer(for: PlantProfile.self, PlantHealthLogEntry.self)
     }
-
     init() {
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+
         if case .success = modelContainerResult {
             // Must be registered before the app finishes launching.
             AutoRefreshScheduler.shared.registerBackgroundTask()

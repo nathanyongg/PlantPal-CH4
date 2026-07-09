@@ -24,6 +24,7 @@ final class PlantProfile {
     var name: String             // e.g. "Monstera deliciosa"
     var nickname: String         // e.g. "My living room plant"
     var addedAt: Date
+    var cloudID: String?
 
     // The one IoT sensor dedicated to this plant — each plant needs its
     // own paired device, so this is what Add Plant enforces before the
@@ -66,6 +67,7 @@ final class PlantProfile {
         self.name         = name
         self.nickname     = nickname
         self.addedAt      = Date()
+        self.cloudID      = nil
         self.lastStatus   = "healthy"
         self.linkedDeviceID   = linkedDeviceID
         self.linkedDeviceName = linkedDeviceName
