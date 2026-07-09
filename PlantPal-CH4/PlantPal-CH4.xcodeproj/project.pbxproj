@@ -324,6 +324,10 @@
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "PlantPal uses your photo library so you can choose a photo of your plant.";
 				INFOPLIST_KEY_CFBundleDisplayName = PlantPal;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "PlantPal uses your camera to take a photo of your plant.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "PlantPal uses your photo library so you can choose a photo of your plant.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
