@@ -96,8 +96,13 @@ struct SettingsView: View {
                         isOn: $notificationsEnabled
                     )
                     .onChange(of: notificationsEnabled) { _, isOn in
-                        guard isOn else { return }
-                        Task { await PlantHealthMonitor.shared.requestNotificationAuthorization() }
+                        Task {
+                            if isOn {
+                                _ = await NotificationManager.shared.requestAuthorization()
+                            } else {
+                                NotificationManager.shared.cancelDailyReminder()
+                            }
+                        }
                     }
 
                     if notificationsEnabled {
@@ -111,6 +116,15 @@ struct SettingsView: View {
                             "Daily Care Reminder",
                             isOn: $dailyReminder
                         )
+                        .onChange(of: dailyReminder) { _, isOn in
+                            Task {
+                                if isOn {
+                                    await NotificationManager.shared.scheduleDailyReminderIfNeeded()
+                                } else {
+                                    NotificationManager.shared.cancelDailyReminder()
+                                }
+                            }
+                        }
                     }
                 }
 

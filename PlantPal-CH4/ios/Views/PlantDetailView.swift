@@ -168,7 +168,15 @@ struct PlantDetailView: View {
         profile.lastSoilMoisturePercent = reading.soilMoisture
         profile.lastLightLux = reading.lightIntensity
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            Task {
+                try? await FirestoreService.shared.uploadPlant(profile)
+                try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
+            }
+        } catch {
+            print("Failed to save check-in:", error)
+        }
     }
 
     // MARK: — Top bar

@@ -195,6 +195,9 @@ struct PlantSetupView: View {
 
     private func deletePlant() {
         guard let editingProfile else { return }
+        Task {
+            try? await FirestoreService.shared.deletePlant(editingProfile)
+        }
         modelContext.delete(editingProfile)
         try? modelContext.save()
         dismiss()
@@ -638,10 +641,15 @@ struct PlantSetupView: View {
 
         do {
             print("Saving context...")
+            try await FirestoreService.shared.uploadPlant(profile)
             try modelContext.save()
             print("Context saved!")
         } catch {
             print("SAVE FAILED:", error)
+            errorMessage = error.localizedDescription
+            isLoading = false
+            phase = .idle
+            return
         }
 
         // Step 3 — done
@@ -702,7 +710,18 @@ struct PlantSetupView: View {
             profile.imageData = plantImage.jpegData(compressionQuality: 0.85)
         }
 
-        try? modelContext.save()
+        do {
+            try await FirestoreService.shared.uploadPlant(profile)
+            try modelContext.save()
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
+            phase = .idle
+            SpeechManager.shared.speak(
+                "Could not update plant. \(error.localizedDescription)"
+            )
+            return
+        }
 
         phase = .done
         isLoading = false

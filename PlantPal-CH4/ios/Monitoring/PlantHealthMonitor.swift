@@ -1,5 +1,4 @@
 import Foundation
-import UserNotifications
 import BackgroundTasks
 import SwiftData
 
@@ -30,12 +29,7 @@ final class PlantHealthMonitor {
     /// Requests notification permission once — safe to call repeatedly.
     @discardableResult
     func requestNotificationAuthorization() async -> Bool {
-        let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            return (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        }
-        return settings.authorizationStatus == .authorized
+        await NotificationManager.shared.requestAuthorization()
     }
 
     // Called per plant, either by the 15-minute AutoRefreshScheduler or
@@ -68,12 +62,13 @@ final class PlantHealthMonitor {
                    : detection.overallLevel == .warning  ? "warning"
                    : "healthy"
 
-        modelContext.insert(PlantHealthLogEntry(
+        let entry = PlantHealthLogEntry(
             timestamp: reading.timestamp,
             reading: reading,
             status: status,
             plant: profile
-        ))
+        )
+        modelContext.insert(entry)
 
         profile.lastReadingAt          = reading.timestamp
         profile.lastStatus             = status
@@ -83,6 +78,8 @@ final class PlantHealthMonitor {
         profile.lastLightLux           = reading.lightIntensity
 
         try? modelContext.save()
+        try? await FirestoreService.shared.uploadPlant(profile)
+        try? await FirestoreService.shared.uploadHealthLog(entry, for: profile)
 
         guard !detection.isHealthy, notifyIfUnhealthy else { return }
 
@@ -117,47 +114,28 @@ final class PlantHealthMonitor {
            Date().timeIntervalSince(last) < 6 * 3600 { return }
         lastFetchFailureNotified = Date()
 
-        let content       = UNMutableNotificationContent()
-        content.title     = "Can't reach your plant sensor"
-        content.body      = error.localizedDescription
-        content.sound     = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content, trigger: nil
+        await NotificationManager.shared.scheduleSensorStatusAlert(
+            body: error.localizedDescription
         )
-        try? await UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: — Notifications
 
     private func notify(detection: DetectionResult, explanation: PlantExplanation) async {
-        let content       = UNMutableNotificationContent()
-        content.title     = explanation.notificationTitle
-        content.body      = explanation.notificationBody
-        content.sound     = explanation.isCritical ? .defaultCritical : .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content, trigger: nil
+        await NotificationManager.shared.schedulePlantHealthAlert(
+            title: explanation.notificationTitle,
+            body: explanation.notificationBody,
+            isCritical: explanation.isCritical
         )
-        try? await UNUserNotificationCenter.current().add(request)
     }
 
     private func notifyFallback(detection: DetectionResult) async {
-        let content       = UNMutableNotificationContent()
-        content.title     = detection.overallLevel == .critical
-                            ? "Your plant needs help now"
-                            : "Plant check-in"
-        content.body      = detection.issuesSummary
-            .replacingOccurrences(of: "- ", with: "")
-        content.sound     = detection.overallLevel == .critical
-                            ? .defaultCritical : .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content, trigger: nil
+        await NotificationManager.shared.schedulePlantHealthAlert(
+            title: detection.overallLevel == .critical
+                ? "Your plant needs help now"
+                : "Plant check-in",
+            body: detection.issuesSummary.replacingOccurrences(of: "- ", with: ""),
+            isCritical: detection.overallLevel == .critical
         )
-        try? await UNUserNotificationCenter.current().add(request)
     }
 }

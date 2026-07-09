@@ -2,16 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.PlantPal.refresh</string>
+	</array>
 	<key>GEMINI_API_KEY</key>
 	<string>$(GEMINI_API_KEY)</string>
-	<key>NSCameraUsageDescription</key>
-	<string>PlantPal uses your camera to take a photo of your plant.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>PlantPal uses your photo library so you can choose a photo of your plant.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>PlantPal uses Bluetooth to pair with your plant sensor and set up its Wi-Fi connection.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>PlantPal connects to your plant sensor on your Wi-Fi network to fetch sensor readings.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInLocalNetworking</key>
@@ -21,10 +17,7 @@
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.PlantPal.refresh</string>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

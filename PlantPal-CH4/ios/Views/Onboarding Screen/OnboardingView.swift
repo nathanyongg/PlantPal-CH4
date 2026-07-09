@@ -20,6 +20,7 @@ struct OnboardingView: View {
 
     // 0 is the welcome splash; 1...pages.count map to pages[0...pages.count-1].
     @State private var currentPage = 0
+    @State private var isCompleting = false
 
     private let pages = OnboardingPage.all
 
@@ -81,13 +82,14 @@ struct OnboardingView: View {
             Button {
                 advance()
             } label: {
-                Text("Get Started")
+                Text(isCompleting ? "Starting…" : "Get Started")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
             }
             .background(AppTheme.Colors.onboardingAccent, in: Capsule())
+            .disabled(isCompleting)
 
             pageDots(
                 activeColor: AppTheme.Colors.onboardingAccent,
@@ -200,7 +202,7 @@ struct OnboardingView: View {
                 Button {
                     advance()
                 } label: {
-                    Text(isLastPage ? "Let's Start" : "Next")
+                    Text(isCompleting ? "Starting…" : (isLastPage ? "Let's Start" : "Next"))
                         .font(.headline)
                         .foregroundStyle(AppTheme.Colors.onboardingPanel)
                         .frame(maxWidth: .infinity)
@@ -208,6 +210,7 @@ struct OnboardingView: View {
                 }
                 .background(.white, in: Capsule())
                 .appOutline(Capsule(), colorScheme: colorScheme)
+                .disabled(isCompleting)
 
                 // Always present (never removed from the layout) so the
                 // card's height stays identical across all three pages —
@@ -215,7 +218,7 @@ struct OnboardingView: View {
                 // to avoid the resize jump that caused a weird shifting
                 // animation when advancing to "Let's Start".
                 Button {
-                    onComplete()
+                    completeOnboarding()
                 } label: {
                     Text("Skip")
                         .font(.headline)
@@ -225,7 +228,7 @@ struct OnboardingView: View {
                 }
                 .background(AppTheme.Colors.onboardingAccent, in: Capsule())
                 .opacity(isLastPage ? 0 : 1)
-                .disabled(isLastPage)
+                .disabled(isLastPage || isCompleting)
                 .accessibilityHidden(isLastPage)
             }
 
@@ -273,10 +276,23 @@ struct OnboardingView: View {
 
     private func advance() {
         if isLastPage {
-            onComplete()
+            completeOnboarding()
         } else {
             withAnimation {
                 currentPage += 1
+            }
+        }
+    }
+
+    private func completeOnboarding() {
+        guard !isCompleting else { return }
+        isCompleting = true
+
+        Task {
+            _ = await NotificationManager.shared.requestAuthorization()
+            await NotificationManager.shared.scheduleDailyReminderIfNeeded()
+            await MainActor.run {
+                onComplete()
             }
         }
     }

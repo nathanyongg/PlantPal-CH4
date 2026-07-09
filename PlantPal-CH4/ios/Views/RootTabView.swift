@@ -42,6 +42,7 @@ struct DashboardView: View {
     @State private var showingDevicePairing = false
     @State private var showingConnectDevice = false
     @State private var pendingDevice: ESP32BLEManager.ProvisionedDevice?
+    @State private var didRestoreFromFirebase = false
 
     /// Devices already dedicated to an existing plant — each plant needs
     /// its own sensor, so these are never offered again during pairing.
@@ -114,6 +115,31 @@ struct DashboardView: View {
                     onCancel: { showingConnectDevice = false }
                 )
             }
+            .task {
+                await restorePlantsFromFirebaseIfNeeded()
+            }
+        }
+    }
+
+    private func restorePlantsFromFirebaseIfNeeded() async {
+        guard !didRestoreFromFirebase else { return }
+        didRestoreFromFirebase = true
+
+        do {
+            let firestorePlants = try await FirestoreService.shared.fetchPlants()
+            let localCloudIDs = Set(plants.compactMap(\.cloudID))
+
+            for firestorePlant in firestorePlants {
+                guard let cloudID = firestorePlant.id,
+                      !localCloudIDs.contains(cloudID)
+                else { continue }
+
+                modelContext.insert(firestorePlant.toPlantProfile())
+            }
+
+            try modelContext.save()
+        } catch {
+            print("Firebase restore failed:", error.localizedDescription)
         }
     }
 
@@ -219,6 +245,9 @@ struct DashboardView: View {
     }
 
     private func delete(_ plant: PlantProfile) {
+        Task {
+            try? await FirestoreService.shared.deletePlant(plant)
+        }
         modelContext.delete(plant)
         try? modelContext.save()
     }

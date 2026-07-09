@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+internal import Combine
 
 // ══════════════════════════════════════════════════════════════
 // MARK: — PlantExplainer
