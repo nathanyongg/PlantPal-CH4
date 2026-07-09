@@ -51,6 +51,11 @@ final class PlantProfile {
     var lastHumidityPercent: Double?
     var lastSoilMoisturePercent: Double?
     var lastLightLux: Double?
+    
+    var lastTemperatureLevel: Int = AlertLevel.healthy.rawValue
+    var lastHumidityLevel: Int = AlertLevel.healthy.rawValue
+    var lastSoilLevel: Int = AlertLevel.healthy.rawValue
+    var lastLightLevel: Int = AlertLevel.healthy.rawValue
 
     @Attribute(.externalStorage)
     var imageData: Data?
@@ -149,3 +154,4 @@ extension PlantThresholds {
         return lower...upper
     }
 }
+
