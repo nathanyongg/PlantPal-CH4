@@ -11,8 +11,8 @@ import SwiftUI
 struct IconCircleButton: View {
     let systemImage: String
     var tint: Color = AppTheme.Colors.textPrimary
-    let accessibilityLabel: String
-    var accessibilityHint: String? = nil
+    let accessibilityLabel: LocalizedStringKey
+    var accessibilityHint: LocalizedStringKey? = nil
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -33,7 +33,7 @@ struct IconCircleButton: View {
 }
 
 private struct OptionalAccessibilityHint: ViewModifier {
-    let hint: String?
+    let hint: LocalizedStringKey?
 
     func body(content: Content) -> some View {
         if let hint {

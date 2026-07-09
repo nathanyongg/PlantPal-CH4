@@ -151,7 +151,7 @@ struct PlantDetailView: View {
     private func applyLiveReading(_ reading: SensorReading) async {
         guard reading.isValid else { return }
 
-        await viewModel.applyLiveReading(
+        viewModel.applyLiveReading(
             reading: reading,
             profile: profile,
             species: profile.name,
@@ -167,8 +167,7 @@ struct PlantDetailView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 topBar
-                header
-                photoAndMoodRow
+                photoAndSpeciesColumn
 
                 // Shows as soon as a check starts and remains visible
                 // for the last known card data, so the insight area does
@@ -239,7 +238,7 @@ struct PlantDetailView: View {
         try? modelContext.save()
     }
 
-    // MARK: — Top bar
+    // MARK: — Top bar (back, centered nickname, refresh)
 
     private var topBar: some View {
         HStack {
@@ -249,10 +248,18 @@ struct PlantDetailView: View {
 
             Spacer()
 
+            Text(profile.nickname)
+                .font(.system(.headline, design: .rounded).weight(.bold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer()
+
             Button {
                 Task { await performCheck() }
             } label: {
-                Image(systemName: "arrow.counterclockwise")
+                Image(systemName: "arrow.trianglehead.counterclockwise")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .frame(width: 40, height: 40)
@@ -272,52 +279,26 @@ struct PlantDetailView: View {
         .padding(.top, 8)
     }
 
-    // MARK: — Header (species + name)
+    // MARK: — Photo (centered, mood badge on the corner) + species name
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(profile.nickname)
-                .font(.system(size: 40, weight: .heavy, design: .rounded))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+    private var photoAndSpeciesColumn: some View {
+        VStack(spacing: 10) {
+            plantPhoto
+                .frame(width: 160, height: 220)
+                .overlay(alignment: .bottom) {
+                    if let plant = viewModel.cardData {
+                        moodPill(plant)
+                    }
+                }
 
             Text(profile.name)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.78)
+                .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: — Photo + mood/message
-
-    @ViewBuilder
-    private var photoAndMoodRow: some View {
-        if let plant = viewModel.cardData {
-            photoAndMoodStacked(plant)
-        } else {
-            plantPhoto
-                .frame(width: 150, height: 205)
-        }
-    }
-
-    private func photoAndMoodStacked(_ plant: PlantCardData) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            plantPhoto
-                .frame(width: 150, height: 205)
-                .layoutPriority(1)
-
-            VStack(alignment: .trailing, spacing: 10) {
-                moodPill(plant)
-
-                messageBubble(plant)
-            }
-            .padding(.top, 34)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .layoutPriority(1)
-        }
     }
 
     private var plantPhoto: some View {
@@ -353,29 +334,13 @@ struct PlantDetailView: View {
                 .font(.system(size: 14))
             Text(plant.mood)
                 .font(AppTheme.Typography.subtitle.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.Colors.textPrimary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
-        .background(AppTheme.Colors.insightPanel.opacity(0.9), in: Capsule())
+        .background(AppTheme.Colors.surface, in: Capsule())
         .appOutline(Capsule(), colorScheme: colorScheme)
-    }
-
-    private func messageBubble(_ plant: PlantCardData) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Today's message")
-                .font(AppTheme.Typography.tiny)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-            Text("\u{201C}\(plant.todaysMessage)\u{201D}")
-                .font(AppTheme.Typography.subtitle.weight(.medium))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .appOutline(RoundedRectangle(cornerRadius: 18, style: .continuous), colorScheme: colorScheme)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
     }
 
     // MARK: — Sensor device card
@@ -420,9 +385,10 @@ struct PlantDetailView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: sensorCardIcon)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.Colors.textSecondary.opacity(0.12), in: Circle())
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(sensorDeviceName)
@@ -675,9 +641,17 @@ struct PlantDetailView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.Colors.insightPanel, in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
+        .background(insightBackgroundColor, in: RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
         .appOutline(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous), colorScheme: colorScheme)
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
+    }
+
+    /// Critical/endangered readings get a red insight panel instead of
+    /// the default tone, so the most urgent state is unmissable at a
+    /// glance — everything else (healthy, warning, no reading yet)
+    /// keeps the standard panel color.
+    private var insightBackgroundColor: Color {
+        viewModel.lastDetectionLevel == .critical ? AppTheme.Colors.critical : AppTheme.Colors.insightPanel
     }
 }
 

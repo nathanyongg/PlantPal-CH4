@@ -133,15 +133,6 @@ struct DashboardView: View {
                     showingConnectDevice = true
                 }
 
-                if !filteredPlants.isEmpty {
-                    IconCircleButton(
-                        systemImage: "antenna.radiowaves.left.and.right",
-                        accessibilityLabel: "Test Plant Sensor Pairing"
-                    ) {
-                        showingDevicePairing = true
-                    }
-                }
-
                 IconCircleButton(systemImage: "gearshape.fill", accessibilityLabel: "Settings") {
                     showingSettings = true
                 }

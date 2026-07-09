@@ -19,6 +19,7 @@ struct PairedDevicesView: View {
     private var plants: [PlantProfile]
 
     @State private var pendingRemoval: PlantProfile?
+    @State private var selectedPlant: PlantProfile?
 
     private var pairedPlants: [PlantProfile] {
         plants.filter { $0.linkedDeviceID != nil }
@@ -30,9 +31,15 @@ struct PairedDevicesView: View {
                 if pairedPlants.isEmpty {
                     emptyState
                 } else {
-                    List {
-                        ForEach(pairedPlants) { plant in
-                            row(for: plant)
+                    Form {
+                        Section {
+                            ForEach(pairedPlants) { plant in
+                                Button {
+                                    selectedPlant = plant
+                                } label: {
+                                    row(for: plant)
+                                }
+                                .buttonStyle(.plain)
                                 .listRowBackground(AppTheme.Colors.surface)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -41,12 +48,17 @@ struct PairedDevicesView: View {
                                         Label("Remove", systemImage: "xmark.circle")
                                     }
                                 }
+                            }
+                        } footer: {
+                            Text("Tap a device to view its plant, or swipe to remove a pairing.")
                         }
                     }
-                    .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                 }
             }
+        }
+        .navigationDestination(item: $selectedPlant) { plant in
+            PlantDetailView(profile: plant)
         }
         .navigationTitle("Paired Devices")
         .navigationBarTitleDisplayMode(.inline)
@@ -93,10 +105,15 @@ struct PairedDevicesView: View {
             }
 
             Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Swipe to remove this pairing")
+        .accessibilityHint("Opens this plant. Swipe to remove the pairing.")
     }
 
     private var emptyState: some View {
